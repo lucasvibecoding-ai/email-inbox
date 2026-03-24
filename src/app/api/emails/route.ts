@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { to, cc, bcc, subject, html, text, inReplyTo, references } = body;
-    const from = `${process.env.EMAIL_DOMAIN} <${process.env.DEFAULT_EMAIL}>`;
+    const from = `${process.env.SENDER_NAME || 'Sadie'} <${process.env.DEFAULT_EMAIL}>`;
 
     const headers: Record<string, string> = {};
     if (inReplyTo) headers['In-Reply-To'] = inReplyTo;
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     await supabase.from('emails').insert({
       message_id: result.data?.id || `sent-${Date.now()}`,
       from_address: process.env.DEFAULT_EMAIL,
-      from_name: process.env.EMAIL_DOMAIN,
+      from_name: process.env.SENDER_NAME || 'Sadie',
       to_addresses: Array.isArray(to) ? to : [to],
       cc_addresses: cc || null,
       bcc_addresses: bcc || null,
