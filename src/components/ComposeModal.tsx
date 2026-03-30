@@ -29,18 +29,31 @@ export default function ComposeModal({ replyTo, onSend, onClose, sending }: Comp
       ? `\n\n--- On ${new Date(replyTo.created_at).toLocaleString()}, ${replyTo.from_name || replyTo.from_address} wrote ---\n${replyTo.text_body || ''}`
       : ''
   );
+  const [mode, setMode] = useState<'text' | 'html'>('text');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const refs = replyTo?.references ? [...replyTo.references] : [];
     if (replyTo?.message_id) refs.push(replyTo.message_id);
 
+    let html: string;
+    let text: string;
+
+    if (mode === 'html') {
+      html = body;
+      // Strip tags for plain text fallback
+      text = body.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    } else {
+      text = body;
+      html = `<div style="font-family: sans-serif; white-space: pre-wrap;">${body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</div>`;
+    }
+
     onSend({
       to,
       cc: cc || undefined,
       subject,
-      text: body,
-      html: `<div style="font-family: sans-serif; white-space: pre-wrap;">${body.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</div>`,
+      text,
+      html,
       inReplyTo: replyTo?.message_id || undefined,
       references: refs.length ? refs : undefined,
     });
@@ -51,9 +64,22 @@ export default function ComposeModal({ replyTo, onSend, onClose, sending }: Comp
       <div className="bg-white rounded-t-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[80vh]">
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
           <h3 className="font-semibold">{replyTo ? 'Reply' : 'New Email'}</h3>
-          <button onClick={onClose} className="text-[var(--muted)] hover:text-[var(--foreground)] text-xl cursor-pointer">
-            ×
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMode(mode === 'text' ? 'html' : 'text')}
+              className={`text-xs px-2 py-1 rounded cursor-pointer ${
+                mode === 'html'
+                  ? 'bg-blue-100 text-[var(--primary)]'
+                  : 'bg-gray-100 text-[var(--muted)]'
+              }`}
+            >
+              {mode === 'html' ? 'HTML' : 'Plain Text'}
+            </button>
+            <button onClick={onClose} className="text-[var(--muted)] hover:text-[var(--foreground)] text-xl cursor-pointer">
+              ×
+            </button>
+          </div>
         </div>
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           <div className="px-4 py-2 border-b border-[var(--border)]">
@@ -84,11 +110,18 @@ export default function ComposeModal({ replyTo, onSend, onClose, sending }: Comp
               className="w-full outline-none text-sm py-1"
             />
           </div>
+          {mode === 'html' && (
+            <div className="px-4 py-1 bg-gray-50 border-b border-[var(--border)] text-xs text-[var(--muted)]">
+              Write raw HTML — it will be sent as-is
+            </div>
+          )}
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="Write your email..."
-            className="flex-1 px-4 py-3 outline-none resize-none text-sm min-h-[200px]"
+            placeholder={mode === 'html' ? '<h1>Hello!</h1>\n<p>Your HTML email here...</p>' : 'Write your email...'}
+            className={`flex-1 px-4 py-3 outline-none resize-none text-sm min-h-[200px] ${
+              mode === 'html' ? 'font-mono text-xs' : ''
+            }`}
           />
           <div className="flex justify-between items-center px-4 py-3 border-t border-[var(--border)]">
             <button
