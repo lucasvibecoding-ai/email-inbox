@@ -30,6 +30,7 @@ export default function ComposeModal({ replyTo, onSend, onClose, sending }: Comp
       : ''
   );
   const [mode, setMode] = useState<'text' | 'html'>('text');
+  const [showPreview, setShowPreview] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +77,19 @@ export default function ComposeModal({ replyTo, onSend, onClose, sending }: Comp
             >
               {mode === 'html' ? 'HTML' : 'Plain Text'}
             </button>
+            {mode === 'html' && (
+              <button
+                type="button"
+                onClick={() => setShowPreview(!showPreview)}
+                className={`text-xs px-2 py-1 rounded cursor-pointer ${
+                  showPreview
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-100 text-[var(--muted)]'
+                }`}
+              >
+                {showPreview ? 'Editor' : 'Preview'}
+              </button>
+            )}
             <button onClick={onClose} className="text-[var(--muted)] hover:text-[var(--foreground)] text-xl cursor-pointer">
               ×
             </button>
@@ -110,19 +124,30 @@ export default function ComposeModal({ replyTo, onSend, onClose, sending }: Comp
               className="w-full outline-none text-sm py-1"
             />
           </div>
-          {mode === 'html' && (
+          {mode === 'html' && !showPreview && (
             <div className="px-4 py-1 bg-gray-50 border-b border-[var(--border)] text-xs text-[var(--muted)]">
               Write raw HTML — it will be sent as-is
             </div>
           )}
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder={mode === 'html' ? '<h1>Hello!</h1>\n<p>Your HTML email here...</p>' : 'Write your email...'}
-            className={`flex-1 px-4 py-3 outline-none resize-none text-sm min-h-[200px] ${
-              mode === 'html' ? 'font-mono text-xs' : ''
-            }`}
-          />
+          {mode === 'html' && showPreview ? (
+            <div className="flex-1 overflow-y-auto min-h-[200px]">
+              <iframe
+                srcDoc={body}
+                className="w-full h-full min-h-[200px] border-0"
+                sandbox=""
+                title="Email preview"
+              />
+            </div>
+          ) : (
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder={mode === 'html' ? '<h1>Hello!</h1>\n<p>Your HTML email here...</p>' : 'Write your email...'}
+              className={`flex-1 px-4 py-3 outline-none resize-none text-sm min-h-[200px] ${
+                mode === 'html' ? 'font-mono text-xs' : ''
+              }`}
+            />
+          )}
           <div className="flex justify-between items-center px-4 py-3 border-t border-[var(--border)]">
             <button
               type="submit"
