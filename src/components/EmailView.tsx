@@ -73,7 +73,7 @@ export default function EmailView({ email, thread, onReply, onArchive, onTrash, 
             {msg.html_body && showHtml ? (
               <iframe
                 srcDoc={msg.html_body}
-                className="w-full border-0 min-h-[300px]"
+                className="w-full border-0 min-h-[600px]"
                 sandbox=""
                 title="Email content"
                 onLoad={(e) => {

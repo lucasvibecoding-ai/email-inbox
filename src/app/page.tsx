@@ -126,7 +126,7 @@ export default function Home() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Email list panel */}
-        <div className="w-80 border-r border-[var(--border)] flex flex-col bg-white">
+        <div className="w-72 shrink-0 border-r border-[var(--border)] flex flex-col bg-white">
           <div className="p-3 border-b border-[var(--border)]">
             <input
               type="text"
