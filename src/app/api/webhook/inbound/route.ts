@@ -23,24 +23,23 @@ export async function POST(req: NextRequest) {
 
     const body = JSON.parse(rawBody);
 
+    // Log the full payload to debug field names
+    console.log('Webhook payload:', JSON.stringify(body, null, 2));
+
     const supabase = getServiceClient();
 
-    // Resend inbound webhook payload
-    const { data } = body;
-    if (!data) {
-      return NextResponse.json({ error: 'No data' }, { status: 400 });
-    }
+    // Resend webhook wraps in { type, data } OR sends flat — handle both
+    const payload = body.data || body;
 
-    const {
-      email_id,
-      from: fromAddr,
-      to,
-      cc,
-      subject,
-      text,
-      html,
-      headers,
-    } = data;
+    // Resend uses various field names depending on version
+    const fromAddr = payload.from || payload.sender;
+    const to = payload.to || payload.recipient;
+    const cc = payload.cc;
+    const subject = payload.subject;
+    const text = payload.text || payload.text_body || payload.plain_text || payload.body;
+    const html = payload.html || payload.html_body;
+    const emailId = payload.email_id || payload.id || payload.message_id;
+    const headers = payload.headers;
 
     // Extract from name and email
     const fromMatch = fromAddr?.match(/^(.+?)\s*<(.+?)>$/);
@@ -56,8 +55,11 @@ export async function POST(req: NextRequest) {
     const references = headers?.['references'] || headers?.['References'];
     const refsArray = references ? references.split(/\s+/).filter(Boolean) : null;
 
+    // Log what we're about to insert
+    console.log('Inserting email:', { fromEmail, fromName, subject, hasText: !!text, hasHtml: !!html });
+
     const { error } = await supabase.from('emails').insert({
-      message_id: email_id || `inbound-${Date.now()}`,
+      message_id: emailId || `inbound-${Date.now()}`,
       from_address: fromEmail,
       from_name: fromName,
       to_addresses: toAddresses,
