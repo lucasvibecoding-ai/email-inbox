@@ -71,9 +71,18 @@ export default function EmailView({ email, thread, onReply, onArchive, onTrash, 
             </div>
 
             {msg.html_body && showHtml ? (
-              <div className="prose prose-sm max-w-none">
-                <div dangerouslySetInnerHTML={{ __html: msg.html_body }} />
-              </div>
+              <iframe
+                srcDoc={msg.html_body}
+                className="w-full border-0 min-h-[300px]"
+                sandbox=""
+                title="Email content"
+                onLoad={(e) => {
+                  const iframe = e.target as HTMLIFrameElement;
+                  if (iframe.contentDocument?.body) {
+                    iframe.style.height = iframe.contentDocument.body.scrollHeight + 20 + 'px';
+                  }
+                }}
+              />
             ) : (
               <pre className="whitespace-pre-wrap text-sm font-sans">{msg.text_body || ''}</pre>
             )}
