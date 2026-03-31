@@ -22,54 +22,55 @@ export async function POST(req: NextRequest) {
     }
 
     const body = JSON.parse(rawBody);
-
-    // Log the full payload to debug field names
-    console.log('Webhook payload:', JSON.stringify(body, null, 2));
-
     const supabase = getServiceClient();
-
-    // Resend webhook wraps in { type, data } OR sends flat — handle both
     const payload = body.data || body;
 
-    // Resend uses various field names depending on version
-    const fromAddr = payload.from || payload.sender;
-    const to = payload.to || payload.recipient;
+    const emailId = payload.email_id;
+    const fromAddr = payload.from;
+    const to = payload.to;
     const cc = payload.cc;
     const subject = payload.subject;
-    const text = payload.text || payload.text_body || payload.plain_text || payload.body;
-    const html = payload.html || payload.html_body;
-    const emailId = payload.email_id || payload.id || payload.message_id;
-    const headers = payload.headers;
+
+    // Webhook doesn't include body — fetch full email from Resend API
+    let text = '';
+    let html = '';
+
+    if (emailId) {
+      try {
+        const res = await fetch(`https://api.resend.com/emails/${emailId}`, {
+          headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
+        });
+        if (res.ok) {
+          const fullEmail = await res.json();
+          text = fullEmail.text || '';
+          html = fullEmail.html || '';
+          console.log('Fetched full email:', { hasText: !!text, hasHtml: !!html });
+        } else {
+          console.error('Failed to fetch email from Resend:', res.status, await res.text());
+        }
+      } catch (err) {
+        console.error('Error fetching email from Resend:', err);
+      }
+    }
 
     // Extract from name and email
     const fromMatch = fromAddr?.match(/^(.+?)\s*<(.+?)>$/);
     const fromName = fromMatch ? fromMatch[1].trim() : null;
     const fromEmail = fromMatch ? fromMatch[2] : fromAddr;
 
-    // Parse to/cc as arrays
     const toAddresses = Array.isArray(to) ? to : [to].filter(Boolean);
-    const ccAddresses = cc ? (Array.isArray(cc) ? cc : [cc]) : null;
-
-    // Get In-Reply-To and References from headers
-    const inReplyTo = headers?.['in-reply-to'] || headers?.['In-Reply-To'] || null;
-    const references = headers?.['references'] || headers?.['References'];
-    const refsArray = references ? references.split(/\s+/).filter(Boolean) : null;
-
-    // Log what we're about to insert
-    console.log('Inserting email:', { fromEmail, fromName, subject, hasText: !!text, hasHtml: !!html });
+    const ccAddresses = cc?.length ? cc : null;
 
     const { error } = await supabase.from('emails').insert({
-      message_id: emailId || `inbound-${Date.now()}`,
+      message_id: payload.message_id || emailId || `inbound-${Date.now()}`,
       from_address: fromEmail,
       from_name: fromName,
       to_addresses: toAddresses,
       cc_addresses: ccAddresses,
       subject,
-      text_body: text,
-      html_body: html,
+      text_body: text || null,
+      html_body: html || null,
       direction: 'inbound',
-      in_reply_to: inReplyTo,
-      references: refsArray,
     });
 
     if (error) {
