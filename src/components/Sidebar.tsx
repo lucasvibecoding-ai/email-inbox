@@ -42,7 +42,7 @@ export default function Sidebar({ currentFolder, onFolderChange, onCompose }: Si
         ))}
       </nav>
       <div className="p-4 text-xs text-[var(--muted)] border-t border-[var(--border)]">
-        hello@thebonsaipath.com
+        hello@katiepaintsjeans.com
       </div>
     </div>
   );
