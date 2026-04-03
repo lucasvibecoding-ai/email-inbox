@@ -7,17 +7,27 @@ export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
 
-    // Verify webhook signature
-    const secret = process.env.WEBHOOK_SECRET;
-    if (secret) {
-      const wh = new Webhook(secret);
-      try {
-        wh.verify(rawBody, {
-          'svix-id': req.headers.get('svix-id') || '',
-          'svix-timestamp': req.headers.get('svix-timestamp') || '',
-          'svix-signature': req.headers.get('svix-signature') || '',
-        });
-      } catch {
+    // Verify webhook signature — try both secrets since each domain has its own
+    const secrets = [
+      process.env.WEBHOOK_SECRET_KATIEPAINTSJEANS,
+      process.env.WEBHOOK_SECRET_THEBONSAIPATH,
+    ].filter(Boolean) as string[];
+
+    if (secrets.length > 0) {
+      const headers = {
+        'svix-id': req.headers.get('svix-id') || '',
+        'svix-timestamp': req.headers.get('svix-timestamp') || '',
+        'svix-signature': req.headers.get('svix-signature') || '',
+      };
+      const verified = secrets.some((s) => {
+        try {
+          new Webhook(s).verify(rawBody, headers);
+          return true;
+        } catch {
+          return false;
+        }
+      });
+      if (!verified) {
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
       }
     }
