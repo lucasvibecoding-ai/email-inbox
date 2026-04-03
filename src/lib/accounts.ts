@@ -20,7 +20,7 @@ export function getAccounts(): Account[] {
     {
       id: 'thebonsaipath',
       email: 'hello@thebonsaipath.com',
-      senderName: 'The Bonsai Path',
+      senderName: 'Keiko Murakami - Bonsai Path',
       domain: 'thebonsaipath.com',
       resendApiKey: process.env.RESEND_API_KEY_THEBONSAIPATH!,
     },
