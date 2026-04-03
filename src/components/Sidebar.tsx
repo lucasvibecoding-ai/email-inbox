@@ -1,9 +1,18 @@
 'use client';
 
+export interface AccountInfo {
+  id: string;
+  email: string;
+  senderName: string;
+}
+
 interface SidebarProps {
   currentFolder: string;
   onFolderChange: (folder: string) => void;
   onCompose: () => void;
+  accounts: AccountInfo[];
+  currentAccount: string;
+  onAccountChange: (accountId: string) => void;
 }
 
 const folders = [
@@ -14,9 +23,33 @@ const folders = [
   { id: 'trash', label: 'Trash', icon: '🗑️' },
 ];
 
-export default function Sidebar({ currentFolder, onFolderChange, onCompose }: SidebarProps) {
+export default function Sidebar({
+  currentFolder,
+  onFolderChange,
+  onCompose,
+  accounts,
+  currentAccount,
+  onAccountChange,
+}: SidebarProps) {
+  const activeAccount = accounts.find((a) => a.id === currentAccount);
+
   return (
     <div className="w-56 bg-white border-r border-[var(--border)] flex flex-col h-full">
+      {accounts.length > 1 && (
+        <div className="px-4 pt-4 pb-2">
+          <select
+            value={currentAccount}
+            onChange={(e) => onAccountChange(e.target.value)}
+            className="w-full text-sm border border-[var(--border)] rounded-lg px-2 py-1.5 outline-none focus:border-[var(--primary)] bg-white cursor-pointer"
+          >
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.senderName}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="p-4">
         <button
           onClick={onCompose}
@@ -42,7 +75,7 @@ export default function Sidebar({ currentFolder, onFolderChange, onCompose }: Si
         ))}
       </nav>
       <div className="p-4 text-xs text-[var(--muted)] border-t border-[var(--border)]">
-        hello@katiepaintsjeans.com
+        {activeAccount?.email || ''}
       </div>
     </div>
   );

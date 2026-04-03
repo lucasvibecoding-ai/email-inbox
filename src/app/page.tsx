@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import Sidebar from '@/components/Sidebar';
+import Sidebar, { AccountInfo } from '@/components/Sidebar';
 import EmailList from '@/components/EmailList';
 import EmailView from '@/components/EmailView';
 import ComposeModal from '@/components/ComposeModal';
 import { Email } from '@/lib/types';
 
 export default function Home() {
+  const [accounts, setAccounts] = useState<AccountInfo[]>([]);
+  const [currentAccount, setCurrentAccount] = useState('');
   const [folder, setFolder] = useState('inbox');
   const [emails, setEmails] = useState<Email[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
@@ -18,15 +20,26 @@ export default function Home() {
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState('');
 
+  // Fetch accounts on mount
+  useEffect(() => {
+    fetch('/api/accounts')
+      .then((res) => res.json())
+      .then((data: AccountInfo[]) => {
+        setAccounts(data);
+        if (data.length > 0) setCurrentAccount(data[0].id);
+      });
+  }, []);
+
   const fetchEmails = useCallback(async () => {
+    if (!currentAccount) return;
     setLoading(true);
-    const params = new URLSearchParams({ folder });
+    const params = new URLSearchParams({ folder, account: currentAccount });
     if (search) params.set('search', search);
     const res = await fetch(`/api/emails?${params}`);
     const data = await res.json();
     setEmails(Array.isArray(data) ? data : []);
     setLoading(false);
-  }, [folder, search]);
+  }, [folder, search, currentAccount]);
 
   useEffect(() => {
     fetchEmails();
@@ -43,7 +56,6 @@ export default function Home() {
     const res = await fetch(`/api/emails/${email.id}`);
     const data = await res.json();
     setThread(data.thread || []);
-    // Mark read locally
     setEmails((prev) => prev.map((e) => (e.id === email.id ? { ...e, is_read: true } : e)));
   };
 
@@ -90,7 +102,7 @@ export default function Home() {
       const res = await fetch('/api/emails', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, accountId: currentAccount }),
       });
       const result = await res.json();
       if (result.success) {
@@ -110,6 +122,11 @@ export default function Home() {
     setShowCompose(true);
   };
 
+  const handleAccountChange = (accountId: string) => {
+    setCurrentAccount(accountId);
+    setSelectedEmail(null);
+  };
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar
@@ -122,6 +139,9 @@ export default function Home() {
           setReplyTo(null);
           setShowCompose(true);
         }}
+        accounts={accounts}
+        currentAccount={currentAccount}
+        onAccountChange={handleAccountChange}
       />
 
       <div className="flex flex-1 overflow-hidden">

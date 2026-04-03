@@ -1,17 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
-import { resend } from '@/lib/resend';
+import { getAccount, getAccounts, getResendClient } from '@/lib/accounts';
 
-// GET /api/emails?folder=inbox|sent|starred|archived|trash
+// GET /api/emails?folder=inbox|sent|starred|archived|trash&account=id
 export async function GET(req: NextRequest) {
   const folder = req.nextUrl.searchParams.get('folder') || 'inbox';
   const search = req.nextUrl.searchParams.get('search') || '';
+  const accountId = req.nextUrl.searchParams.get('account') || getAccounts()[0].id;
+  const account = getAccount(accountId);
   const supabase = getServiceClient();
 
   let query = supabase
     .from('emails')
     .select('*')
     .order('created_at', { ascending: false });
+
+  // Filter by account
+  if (account) {
+    query = query.or(
+      `to_addresses.cs.{${account.email}},from_address.eq.${account.email}`
+    );
+  }
 
   switch (folder) {
     case 'inbox':
@@ -48,8 +57,15 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { to, cc, bcc, subject, html, text, inReplyTo, references } = body;
-    const from = `${process.env.SENDER_NAME || 'Katie Paints Jeans'} <${process.env.DEFAULT_EMAIL}>`;
+    const { to, cc, bcc, subject, html, text, inReplyTo, references, accountId } = body;
+
+    const account = getAccount(accountId || getAccounts()[0].id);
+    if (!account) {
+      return NextResponse.json({ error: 'Invalid account' }, { status: 400 });
+    }
+
+    const resend = getResendClient(account);
+    const from = `${account.senderName} <${account.email}>`;
 
     const headers: Record<string, string> = {};
     if (inReplyTo) headers['In-Reply-To'] = inReplyTo;
@@ -74,8 +90,8 @@ export async function POST(req: NextRequest) {
     const supabase = getServiceClient();
     await supabase.from('emails').insert({
       message_id: result.data?.id || `sent-${Date.now()}`,
-      from_address: process.env.DEFAULT_EMAIL,
-      from_name: process.env.SENDER_NAME || 'Katie Paints Jeans',
+      from_address: account.email,
+      from_name: account.senderName,
       to_addresses: Array.isArray(to) ? to : [to],
       cc_addresses: cc || null,
       bcc_addresses: bcc || null,

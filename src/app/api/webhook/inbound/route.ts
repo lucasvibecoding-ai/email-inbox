@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
+import { getAccountByEmail, getAccounts } from '@/lib/accounts';
 import { Webhook } from 'svix';
 
 export async function POST(req: NextRequest) {
@@ -31,6 +32,15 @@ export async function POST(req: NextRequest) {
     const cc = payload.cc;
     const subject = payload.subject;
 
+    // Determine which account this email is for
+    const toAddresses = Array.isArray(to) ? to : [to].filter(Boolean);
+    let account = toAddresses
+      .map((addr: string) => getAccountByEmail(addr))
+      .find(Boolean);
+    if (!account) {
+      account = getAccounts()[0];
+    }
+
     // Webhook doesn't include body — fetch full email from Resend API
     let text = '';
     let html = '';
@@ -38,7 +48,7 @@ export async function POST(req: NextRequest) {
     if (emailId) {
       try {
         const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
-          headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
+          headers: { Authorization: `Bearer ${account.resendApiKey}` },
         });
         if (res.ok) {
           const fullEmail = await res.json();
@@ -58,7 +68,6 @@ export async function POST(req: NextRequest) {
     const fromName = fromMatch ? fromMatch[1].trim() : null;
     const fromEmail = fromMatch ? fromMatch[2] : fromAddr;
 
-    const toAddresses = Array.isArray(to) ? to : [to].filter(Boolean);
     const ccAddresses = cc?.length ? cc : null;
 
     const { error } = await supabase.from('emails').insert({
