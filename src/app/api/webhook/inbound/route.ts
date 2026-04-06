@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
 
     // Verify webhook signature — try both secrets since each domain has its own
     const secrets = [
-      process.env.WEBHOOK_SECRET_KATIEPAINTSJEANS,
+      process.env.WEBHOOK_SECRET_CLAIREDOESPERFUMES,
       process.env.WEBHOOK_SECRET_THEBONSAIPATH,
     ].filter(Boolean) as string[];
 

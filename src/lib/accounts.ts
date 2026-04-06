@@ -11,11 +11,11 @@ export interface Account {
 export function getAccounts(): Account[] {
   return [
     {
-      id: 'katiepaintsjeans',
-      email: 'hello@katiepaintsjeans.com',
-      senderName: 'Katie Paints Jeans',
-      domain: 'katiepaintsjeans.com',
-      resendApiKey: process.env.RESEND_API_KEY_KATIEPAINTSJEANS!,
+      id: 'clairedoesperfumes',
+      email: 'hello@clairedoesperfumes.com',
+      senderName: 'Claire Beaumont',
+      domain: 'clairedoesperfumes.com',
+      resendApiKey: process.env.RESEND_API_KEY_CLAIREDOESPERFUMES!,
     },
     {
       id: 'thebonsaipath',
