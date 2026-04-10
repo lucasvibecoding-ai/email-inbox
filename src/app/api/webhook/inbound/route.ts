@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
     const secrets = [
       process.env.WEBHOOK_SECRET_CLAIREDOESPERFUMES,
       process.env.WEBHOOK_SECRET_THEBONSAIPATH,
+      process.env.WEBHOOK_SECRET_EMMASTERRARIUMS,
     ].filter(Boolean) as string[];
 
     if (secrets.length > 0) {
