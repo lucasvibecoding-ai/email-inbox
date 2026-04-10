@@ -24,6 +24,13 @@ export function getAccounts(): Account[] {
       domain: 'thebonsaipath.com',
       resendApiKey: process.env.RESEND_API_KEY_THEBONSAIPATH!,
     },
+    {
+      id: 'emmasterrariums',
+      email: 'hello@emmasterrariums.com',
+      senderName: 'Emma Wilson',
+      domain: 'emmasterrariums.com',
+      resendApiKey: process.env.RESEND_API_KEY_EMMASTERRARIUMS!,
+    },
   ];
 }
 
