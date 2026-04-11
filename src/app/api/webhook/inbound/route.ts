@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
       process.env.WEBHOOK_SECRET_CLAIREDOESPERFUMES,
       process.env.WEBHOOK_SECRET_THEBONSAIPATH,
       process.env.WEBHOOK_SECRET_EMMASTERRARIUMS,
+      process.env.WEBHOOK_SECRET_SHIBORICLASS,
     ].filter(Boolean) as string[];
 
     if (secrets.length > 0) {

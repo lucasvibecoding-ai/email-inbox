@@ -31,6 +31,13 @@ export function getAccounts(): Account[] {
       domain: 'emmasterrariums.com',
       resendApiKey: process.env.RESEND_API_KEY_EMMASTERRARIUMS!,
     },
+    {
+      id: 'shiboriclass',
+      email: 'hello@shiboriclass.com',
+      senderName: 'Aiko Mori',
+      domain: 'shiboriclass.com',
+      resendApiKey: process.env.RESEND_API_KEY_SHIBORICLASS!,
+    },
   ];
 }
 
