@@ -38,6 +38,13 @@ export function getAccounts(): Account[] {
       domain: 'shiboriclass.com',
       resendApiKey: process.env.RESEND_API_KEY_SHIBORICLASS!,
     },
+    {
+      id: 'busymomslearnai',
+      email: 'hello@busymomslearnai.com',
+      senderName: 'Sarah Wilson',
+      domain: 'busymomslearnai.com',
+      resendApiKey: process.env.RESEND_API_KEY_BUSYMOMSLEARNAI!,
+    },
   ];
 }
 
