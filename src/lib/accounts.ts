@@ -34,7 +34,7 @@ export function getAccounts(): Account[] {
     {
       id: 'shiboriclass',
       email: 'hello@shiboriclass.com',
-      senderName: 'Aiko Mori',
+      senderName: 'Aiko Mori - Shibori',
       domain: 'shiboriclass.com',
       resendApiKey: process.env.RESEND_API_KEY_SHIBORICLASS!,
     },
@@ -48,7 +48,7 @@ export function getAccounts(): Account[] {
     {
       id: 'mizuhikiclass',
       email: 'hello@mizuhikiclass.com',
-      senderName: 'Aiko Mori',
+      senderName: 'Aiko Mori - Mizuhiki',
       domain: 'mizuhikiclass.com',
       resendApiKey: process.env.RESEND_API_KEY_MIZUHIKICLASS!,
     },
