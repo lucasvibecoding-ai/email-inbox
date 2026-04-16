@@ -45,6 +45,13 @@ export function getAccounts(): Account[] {
       domain: 'busymomslearnai.com',
       resendApiKey: process.env.RESEND_API_KEY_BUSYMOMSLEARNAI!,
     },
+    {
+      id: 'mizuhikiclass',
+      email: 'hello@mizuhikiclass.com',
+      senderName: 'Aiko Mori',
+      domain: 'mizuhikiclass.com',
+      resendApiKey: process.env.RESEND_API_KEY_MIZUHIKICLASS!,
+    },
   ];
 }
 
