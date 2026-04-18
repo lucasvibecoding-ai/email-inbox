@@ -55,7 +55,7 @@ export function getAccounts(): Account[] {
     {
       id: 'sumieclass',
       email: 'hello@sumieclass.com',
-      senderName: 'Aiko Mori',
+      senderName: 'Aiko Mori - Sumie',
       domain: 'sumieclass.com',
       resendApiKey: process.env.RESEND_API_KEY_SUMIECLASS!,
     },
