@@ -67,3 +67,8 @@ $$ language plpgsql;
 create trigger trg_assign_thread
   before insert on emails
   for each row execute function assign_thread_id();
+
+-- Row Level Security
+-- The server uses the service role (bypasses RLS); the anon key should have no access.
+alter table emails enable row level security;
+alter table attachments enable row level security;
