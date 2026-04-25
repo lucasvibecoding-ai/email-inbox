@@ -4,6 +4,7 @@ export interface AccountInfo {
   id: string;
   email: string;
   senderName: string;
+  displayName: string;
 }
 
 interface SidebarProps {
@@ -44,7 +45,7 @@ export default function Sidebar({
           >
             {accounts.map((account) => (
               <option key={account.id} value={account.id}>
-                {account.senderName}
+                {account.displayName}
               </option>
             ))}
           </select>
