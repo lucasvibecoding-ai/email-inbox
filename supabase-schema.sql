@@ -1,4 +1,9 @@
 -- Run this in your Supabase SQL Editor to set up the database
+--
+-- IMPORTANT — after Oct 30, 2026 Supabase no longer auto-exposes new public
+-- tables to the Data API (@supabase/supabase-js). Existing tables below keep
+-- their grants, but ANY NEW TABLE you add must include explicit GRANTs.
+-- See AGENTS.md ("Supabase Data API grants") for the required block.
 
 -- Emails table
 create table emails (
