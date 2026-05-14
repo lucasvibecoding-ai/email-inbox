@@ -83,6 +83,14 @@ export function getAccounts(): Account[] {
       domain: 'mandalapractice.com',
       resendApiKey: process.env.RESEND_API_KEY_MANDALAPRACTICE!,
     },
+    {
+      id: 'watercolorfashion',
+      email: 'hello@watercolorfashion.com',
+      senderName: 'Aiko Mori',
+      displayName: 'Aiko Mori - Watercolor Fashion',
+      domain: 'watercolorfashion.com',
+      resendApiKey: process.env.RESEND_API_KEY_WATERCOLORFASHION!,
+    },
   ];
 }
 
