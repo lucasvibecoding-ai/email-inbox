@@ -91,6 +91,14 @@ export function getAccounts(): Account[] {
       domain: 'watercolorfashion.com',
       resendApiKey: process.env.RESEND_API_KEY_WATERCOLORFASHION!,
     },
+    {
+      id: 'visualnotesclass',
+      email: 'hello@visualnotesclass.com',
+      senderName: 'Aiko Mori',
+      displayName: 'Aiko Mori - Visual Notes',
+      domain: 'visualnotesclass.com',
+      resendApiKey: process.env.RESEND_API_KEY_VISUALNOTESCLASS!,
+    },
   ];
 }
 
