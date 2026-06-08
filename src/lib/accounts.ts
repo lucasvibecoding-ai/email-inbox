@@ -99,6 +99,14 @@ export function getAccounts(): Account[] {
       domain: 'visualnotesclass.com',
       resendApiKey: process.env.RESEND_API_KEY_VISUALNOTESCLASS!,
     },
+    {
+      id: 'paletteknifeclass',
+      email: 'hello@paletteknifeclass.com',
+      senderName: 'Aiko Mori',
+      displayName: 'Palette Knife - Aiko Mori',
+      domain: 'paletteknifeclass.com',
+      resendApiKey: process.env.RESEND_API_KEY_PALETTEKNIFECLASS!,
+    },
   ];
 }
 
