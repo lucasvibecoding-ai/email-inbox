@@ -115,6 +115,14 @@ export function getAccounts(): Account[] {
       domain: 'japanesedoodleclass.com',
       resendApiKey: process.env.RESEND_API_KEY_JAPANESEDOODLECLASS!,
     },
+    {
+      id: 'inkcatclass',
+      email: 'hello@inkcatclass.com',
+      senderName: 'Aiko Mori',
+      displayName: 'Aiko Mori - Ink Cats',
+      domain: 'inkcatclass.com',
+      resendApiKey: process.env.RESEND_API_KEY_INKCATCLASS!,
+    },
   ];
 }
 
