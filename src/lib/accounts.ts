@@ -107,6 +107,14 @@ export function getAccounts(): Account[] {
       domain: 'paletteknifeclass.com',
       resendApiKey: process.env.RESEND_API_KEY_PALETTEKNIFECLASS!,
     },
+    {
+      id: 'japanesedoodleclass',
+      email: 'hello@japanesedoodleclass.com',
+      senderName: 'Aiko Mori',
+      displayName: 'Aiko Mori - Japanese Doodling',
+      domain: 'japanesedoodleclass.com',
+      resendApiKey: process.env.RESEND_API_KEY_JAPANESEDOODLECLASS!,
+    },
   ];
 }
 
