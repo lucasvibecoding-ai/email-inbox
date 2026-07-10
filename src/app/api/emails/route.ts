@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { to, cc, bcc, subject, html, text, inReplyTo, references, accountId } = body;
+    const { to, cc, bcc, subject, html, text, inReplyTo, references, accountId, replyToEmailId } = body;
 
     const account = getAccount(accountId || getAccounts()[0].id);
     if (!account) {
@@ -88,21 +88,34 @@ export async function POST(req: NextRequest) {
 
     // Store sent email in DB
     const supabase = getServiceClient();
-    await supabase.from('emails').insert({
-      message_id: result.data?.id || `sent-${Date.now()}`,
-      from_address: account.email,
-      from_name: account.senderName,
-      to_addresses: Array.isArray(to) ? to : [to],
-      cc_addresses: cc || null,
-      bcc_addresses: bcc || null,
-      subject,
-      text_body: text || null,
-      html_body: html || null,
-      direction: 'outbound',
-      is_read: true,
-      in_reply_to: inReplyTo || null,
-      references: references || null,
-    });
+    const { data: outbound } = await supabase
+      .from('emails')
+      .insert({
+        message_id: result.data?.id || `sent-${Date.now()}`,
+        from_address: account.email,
+        from_name: account.senderName,
+        to_addresses: Array.isArray(to) ? to : [to],
+        cc_addresses: cc || null,
+        bcc_addresses: bcc || null,
+        subject,
+        text_body: text || null,
+        html_body: html || null,
+        direction: 'outbound',
+        is_read: true,
+        in_reply_to: inReplyTo || null,
+        references: references || null,
+      })
+      .select('id')
+      .single();
+
+    // If this send answered a triaged inbound email (from the Master View),
+    // mark that email replied and link the outbound message.
+    if (replyToEmailId) {
+      await supabase
+        .from('emails')
+        .update({ ai_status: 'auto_replied', ai_reply_email_id: outbound?.id ?? null, is_read: true })
+        .eq('id', replyToEmailId);
+    }
 
     return NextResponse.json({ success: true, id: result.data?.id });
   } catch (err) {

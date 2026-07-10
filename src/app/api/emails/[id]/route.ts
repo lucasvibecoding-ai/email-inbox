@@ -41,7 +41,7 @@ export async function PATCH(
   const body = await req.json();
   const supabase = getServiceClient();
 
-  const allowed = ['is_read', 'is_starred', 'is_archived', 'is_trash'];
+  const allowed = ['is_read', 'is_starred', 'is_archived', 'is_trash', 'ai_status'];
   const updates: Record<string, unknown> = {};
   for (const key of allowed) {
     if (key in body) updates[key] = body[key];

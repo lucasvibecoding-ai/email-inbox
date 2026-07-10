@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 export interface AccountInfo {
   id: string;
   email: string;
@@ -51,13 +53,19 @@ export default function Sidebar({
           </select>
         </div>
       )}
-      <div className="p-4">
+      <div className="p-4 space-y-2">
         <button
           onClick={onCompose}
           className="w-full bg-[var(--primary)] text-white rounded-lg px-4 py-2.5 font-medium hover:bg-[var(--primary-hover)] transition-colors cursor-pointer"
         >
           Compose
         </button>
+        <Link
+          href="/master"
+          className="w-full flex items-center justify-center gap-2 border border-[var(--border)] rounded-lg px-4 py-2 text-sm font-medium text-[var(--primary)] hover:bg-blue-50 transition-colors"
+        >
+          ⚡ Master View
+        </Link>
       </div>
       <nav className="flex-1 px-2">
         {folders.map((folder) => (

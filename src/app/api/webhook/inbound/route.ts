@@ -1,7 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { getAccountByEmail, getAccounts } from '@/lib/accounts';
+import { runTriageForEmail } from '@/lib/triage';
+import { Email } from '@/lib/types';
 import { Webhook } from 'svix';
+
+export const runtime = 'nodejs';
+export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
   try {
@@ -51,12 +56,10 @@ export async function POST(req: NextRequest) {
 
     // Determine which account this email is for
     const toAddresses = Array.isArray(to) ? to : [to].filter(Boolean);
-    let account = toAddresses
-      .map((addr: string) => getAccountByEmail(addr))
-      .find(Boolean);
-    if (!account) {
-      account = getAccounts()[0];
-    }
+    const matchedAccount =
+      toAddresses.map((addr: string) => getAccountByEmail(addr)).find(Boolean) || null;
+    // Fall back to the first account only for fetching the message body from Resend.
+    const account = matchedAccount || getAccounts()[0];
 
     // Webhook doesn't include body — fetch full email from Resend API
     let text = '';
@@ -87,21 +90,31 @@ export async function POST(req: NextRequest) {
 
     const ccAddresses = cc?.length ? cc : null;
 
-    const { error } = await supabase.from('emails').insert({
-      message_id: payload.message_id || emailId || `inbound-${Date.now()}`,
-      from_address: fromEmail,
-      from_name: fromName,
-      to_addresses: toAddresses,
-      cc_addresses: ccAddresses,
-      subject,
-      text_body: text || null,
-      html_body: html || null,
-      direction: 'inbound',
-    });
+    const { data: inserted, error } = await supabase
+      .from('emails')
+      .insert({
+        message_id: payload.message_id || emailId || `inbound-${Date.now()}`,
+        from_address: fromEmail,
+        from_name: fromName,
+        to_addresses: toAddresses,
+        cc_addresses: ccAddresses,
+        subject,
+        text_body: text || null,
+        html_body: html || null,
+        direction: 'inbound',
+      })
+      .select()
+      .single();
 
     if (error) {
       console.error('DB insert error:', error);
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Triage the new email with AI after the 200 response is sent (draft-only).
+    // Only when we can map the recipient to a known course account.
+    if (matchedAccount && inserted) {
+      after(() => runTriageForEmail(supabase, inserted as Email, matchedAccount));
     }
 
     return NextResponse.json({ success: true });

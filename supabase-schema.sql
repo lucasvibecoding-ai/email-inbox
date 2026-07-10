@@ -77,3 +77,14 @@ create trigger trg_assign_thread
 -- The server uses the service role (bypasses RLS); the anon key should have no access.
 alter table emails enable row level security;
 alter table attachments enable row level security;
+
+-- App settings (key/value). Backs the Master View "Auto-send AI emails" toggle.
+-- New table after Oct 30, 2026, so it needs explicit grants (see AGENTS.md).
+create table if not exists app_settings (
+  key text primary key,
+  value text not null,
+  updated_at timestamptz default now()
+);
+
+grant select, insert, update, delete on public.app_settings to service_role;
+alter table public.app_settings enable row level security;
