@@ -9,9 +9,6 @@ export async function POST(req: NextRequest) {
 
     // Verify webhook signature — try both secrets since each domain has its own
     const secrets = [
-      process.env.WEBHOOK_SECRET_CLAIREDOESPERFUMES,
-      process.env.WEBHOOK_SECRET_THEBONSAIPATH,
-      process.env.WEBHOOK_SECRET_EMMASTERRARIUMS,
       process.env.WEBHOOK_SECRET_SHIBORICLASS,
       process.env.WEBHOOK_SECRET_MIZUHIKICLASS,
       process.env.WEBHOOK_SECRET_SUMIECLASS,
