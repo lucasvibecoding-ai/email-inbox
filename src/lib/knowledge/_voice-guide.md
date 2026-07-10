@@ -1,5 +1,7 @@
 # Voice & Style Guide: Aiko Mori
 
+> **REQUIRED FORMAT (overrides the greeting and sign-off examples below).** Every reply MUST open with two lines — `Hi [First name],` then `thanks for the email.` (use the sender's first name; if none is available, use `Hi there,`) — and MUST close with two lines — `Best regards,` then `Aiko`. The greeting and sign-off shown later in this guide reflect the older order-confirmation style and are superseded by this rule. Everything else here (tone, rhythm, warmth, short paragraphs) still applies to the body. One more hard rule: **never use a dash or hyphen of any kind (—, –, or -) in your wording.** Write compound terms as separate words (step by step, self paced, one time, sign in). Keep the hyphen only in literal strings you must quote exactly (the login URL, an email address, an exact subject line) and proper names whose standard spelling includes a hyphen (for example sumi-e).
+
 A shared reference for writing new customer-support replies as **Aiko Mori** that are indistinguishable from her own writing. Built from the real customer emails across all 9 course sites. This guide applies to every site; the per-site brief supplies the facts and the exact sender address / course name.
 
 > Note on the corpus: in every repo the only customer-facing, written-as-Aiko email is `emails/OrderConfirmation.tsx`. The core voice sentences are byte-for-byte identical across all 9 sites (only the course name changes). The voice is stable, warm, plain, and lightly templated. Match it.

@@ -37,6 +37,11 @@ export interface TriageResult {
 
 export type AiStatus = 'needs_human' | 'auto_replied' | 'no_reply_needed' | 'error';
 
+export interface StyleExample {
+  subject: string | null;
+  text: string;
+}
+
 // --- Auto-send policy ------------------------------------------------------
 // The auto-send master switch lives in the DB (app_settings, toggled from the
 // Master View) and defaults to OFF. When ON, an email is auto-sent only if the
@@ -87,12 +92,12 @@ const TRIAGE_TOOL_SCHEMA: Anthropic.Tool['input_schema'] = {
   required: ['category', 'needs_human', 'confidence', 'reason', 'draft_reply'],
 };
 
-function systemPrompt(account: Account): string {
+function systemPrompt(account: Account, examples: StyleExample[]): string {
   const brief = getBrief(account.id);
   const briefBlock = brief
     ? brief
     : 'No course brief is available for this address. Escalate everything to a human (needs_human = true) and do not attempt a substantive answer.';
-  return [
+  const lines = [
     `You are the customer-support assistant for the online course "${account.displayName}". You reply to emails sent to ${account.email}, writing AS the course's support persona (Aiko Mori). For each incoming email you do two things: (1) triage it into a category, and (2) draft a reply. You MUST call the record_triage tool with your result.`,
     '',
     '## Grounding and safety (critical)',
@@ -102,8 +107,17 @@ function systemPrompt(account: Account): string {
     '- If a customer asks whether a discount, sale, countdown, or number of spots is still available or expiring, set needs_human = true. You may state the current price if the brief gives it, but never make claims about timers, deadlines, or remaining availability.',
     '- Never state anything a brief marks NEEDS INPUT or flags as inconsistent. Escalate instead.',
     '',
-    '## The draft reply',
-    '- Write in the persona voice (see VOICE GUIDE): open with "Hi there,", warm and first person, short paragraphs, NO em-dashes, sign off as "Aiko Mori".',
+    '## The draft reply (fixed format)',
+    '- REQUIRED opening. Begin every reply with these two lines, using the sender first name from the From line:',
+    '    Hi [First name],',
+    '    thanks for the email.',
+    '  If no sender name is available, use "Hi there," as the first line. This opening is fixed and overrides any greeting in the VOICE GUIDE.',
+    '- REQUIRED closing. End every reply with exactly these two lines:',
+    '    Best regards,',
+    '    Aiko',
+    '  This sign-off is fixed and overrides any sign-off in the VOICE GUIDE.',
+    '- Between the opening and the closing, answer in the persona voice (see VOICE GUIDE): warm, first person, short paragraphs.',
+    '- Never use a dash or hyphen of any kind (the characters —, –, or -) as punctuation or in ordinary wording. Write compound terms as separate words instead (for example: step by step, self paced, one time, sign in). Keep the hyphen ONLY in: literal strings you must quote exactly (the login URL, an email address, an exact subject line) and proper names whose standard spelling includes a hyphen (for example sumi-e).',
     '- For safe categories (access_help, presale_question), write a complete, helpful answer grounded in the brief.',
     '- For refund, payment_issue, complaint, and any needs_human case: write a warm holding reply that acknowledges the customer and reassures them you are looking into it and will follow up. Do NOT commit to any outcome, amount, timeline, or fact not in the brief.',
     '- For spam, set draft_reply to an empty string.',
@@ -116,7 +130,18 @@ function systemPrompt(account: Account): string {
     '',
     '## VOICE GUIDE',
     getVoiceGuide(),
-  ].join('\n');
+  ];
+  if (examples.length) {
+    lines.push(
+      '',
+      '## HOW THE ACCOUNT OWNER ACTUALLY WRITES (real recent replies to learn from)',
+      'The replies below are real messages the account owner recently sent to customers. Study their tone, word choice, warmth, rhythm, and how they handle situations, and make your draft sound like the same person wrote it. This is your best and most current guide to their real voice. Still ALWAYS keep the required opening, the required closing, and the no-dash rule from above, regardless of what these examples show.',
+      ...examples.map(
+        (ex, i) => `--- Example ${i + 1}${ex.subject ? ` (re: ${ex.subject})` : ''} ---\n${ex.text}`,
+      ),
+    );
+  }
+  return lines.join('\n');
 }
 
 function normalize(input: unknown): TriageResult {
@@ -133,7 +158,7 @@ function normalize(input: unknown): TriageResult {
     needs_human: o.needs_human !== false,
     confidence,
     reason: typeof o.reason === 'string' ? o.reason : '',
-    draft_reply: typeof o.draft_reply === 'string' ? o.draft_reply : '',
+    draft_reply: sanitizeDashes(typeof o.draft_reply === 'string' ? o.draft_reply : ''),
   };
 }
 
@@ -143,6 +168,7 @@ export async function triageEmail(params: {
   fromAddress: string;
   subject: string | null;
   textBody: string | null;
+  styleExamples?: StyleExample[];
 }): Promise<TriageResult> {
   const from = params.fromName
     ? `${params.fromName} <${params.fromAddress}>`
@@ -153,7 +179,7 @@ export async function triageEmail(params: {
   const resp = await anthropic().messages.create({
     model: MODEL,
     max_tokens: 1500,
-    system: systemPrompt(params.account),
+    system: systemPrompt(params.account, params.styleExamples || []),
     messages: [{ role: 'user', content: userMessage }],
     tools: [
       {
@@ -189,6 +215,45 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Hard guarantee of the "never use a dash or hyphen" rule on generated drafts.
+// em/en dashes become a comma; compound hyphens become a space, token by token,
+// while URLs, email addresses, and the proper noun sumi-e keep their hyphen.
+function sanitizeDashes(text: string): string {
+  const t = text.replace(/\s*[—–]\s*/g, ', ');
+  return t.replace(/\S+/g, (tok) =>
+    /^https?:\/\//i.test(tok) || tok.includes('@') || /sumi-e/i.test(tok)
+      ? tok
+      : tok.replace(/-/g, ' '),
+  );
+}
+
+/** Recent real replies the owner sent, used as live voice examples in the
+ *  draft prompt so the AI learns to mimic how the owner writes. */
+export async function getStyleExamples(
+  supabase: SupabaseClient,
+  limit = 6,
+): Promise<StyleExample[]> {
+  const { data, error } = await supabase
+    .from('emails')
+    .select('subject, text_body')
+    .eq('direction', 'outbound')
+    .not('in_reply_to', 'is', null)
+    .not('text_body', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  return (data || [])
+    .map((e) => ({
+      subject: (e.subject as string | null) ?? null,
+      // Drop any quoted-original block so we learn only what the owner wrote.
+      text: String(e.text_body || '')
+        .split(/---+\s*On /)[0]
+        .trim()
+        .slice(0, 900),
+    }))
+    .filter((e) => e.text.length > 0);
+}
+
 /** Triage one inbound email, then either auto-send (if enabled + safe) or
  *  leave a draft. Writes the ai_* fields back to the row either way. */
 export async function runTriageForEmail(
@@ -197,12 +262,14 @@ export async function runTriageForEmail(
   account: Account,
 ): Promise<void> {
   try {
+    const styleExamples = await getStyleExamples(supabase);
     const result = await triageEmail({
       account,
       fromName: email.from_name,
       fromAddress: email.from_address,
       subject: email.subject,
       textBody: email.text_body,
+      styleExamples,
     });
     const autoSendEnabled = await getAutoSend(supabase);
     const status = computeStatus(result, autoSendEnabled);
