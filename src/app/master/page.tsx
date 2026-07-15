@@ -255,6 +255,11 @@ export default function MasterView() {
                     onClick={() => toggle(e)}
                     className="w-full text-left px-6 py-3 flex items-center gap-3 hover:bg-[var(--hover)] cursor-pointer"
                   >
+                    {e.ai_category === 'spam' && (
+                      <span className="shrink-0 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">
+                        SPAM
+                      </span>
+                    )}
                     <span className="shrink-0 text-[10px] uppercase tracking-wide px-2 py-0.5 rounded bg-gray-100 text-gray-600 font-medium w-28 truncate" title={e.account?.displayName || ''}>
                       {siteLabel(e.account)}
                     </span>
