@@ -152,8 +152,8 @@ function systemPrompt(
   if (examples.length) {
     lines.push(
       '',
-      '## HOW THE OWNER HANDLES EMAILS (real past email + reply pairs to learn from)',
-      'Each pair below is a real customer email and the reply the account owner actually sent. Learn BOTH how the owner writes AND how they handle each kind of situation, and draft in the same way. These are your best and most current guide to the owner. Still ALWAYS keep the required opening, the required closing, and the no-dash rule from above.',
+      '## HOW THE OWNER HANDLES EMAILS (real past email + reply pairs, most relevant first)',
+      'Each pair below is a real customer email and the reply the account owner actually sent, chosen because it resembles the email you are answering now. Learn BOTH how the owner writes AND how they handle this kind of situation, and draft in the same way. Still ALWAYS keep the required opening, the required closing, and the no-dash rule from above.',
     );
     examples.forEach((ex, i) => {
       lines.push(
@@ -287,8 +287,8 @@ function findExistingOwnerReply(thread: Email[], email: Email): Email | null {
   );
 }
 
-/** Recent real (customer email -> owner reply) pairs, used as live learning
- *  examples in the draft prompt so the AI mimics how the owner handles email. */
+/** Recent real (customer email -> owner reply) pairs, oldest fallback when no
+ *  relevant match is found. */
 export async function getStyleExamples(
   supabase: SupabaseClient,
   limit = 6,
@@ -322,6 +322,97 @@ export async function getStyleExamples(
       reply: stripQuote(r.text_body).slice(0, 700),
     }))
     .filter((p) => p.reply.length > 0);
+}
+
+const KEYWORD_STOPWORDS = new Set([
+  'the', 'and', 'for', 'you', 'your', 'with', 'have', 'this', 'that', 'from', 'are', 'was', 'not',
+  'but', 'can', 'all', 'get', 'got', 'has', 'how', 'out', 'use', 'one', 'two', 'course', 'courses',
+  'email', 'hello', 'aiko', 'mori', 'please', 'thanks', 'thank', 'would', 'could', 'there', 'here',
+  'just', 'been', 'they', 'them', 'then', 'than', 'some', 'what', 'when', 'which', 'about', 'after',
+  'also', 'into', 'over', 'only', 'very', 'will', 'well', 'need', 'want', 'know', 'like', 'time',
+  'make', 'made', 'send', 'sent', 'see', 'saw', 'did', 'done', 'now', 'yet', 'any', 'our', 'let',
+  'com', 'www', 'purchased', 'purchase', 'paid', 'pay', 'payment', 'payments', 'bought', 'buy',
+  'order', 'ordered', 'received', 'receive', 'day', 'days', 'ago', 'address', 'dollars', 'request',
+  'realize', 'expected', 'look', 'looking', 'through', 'extra', 'statement', 'shows', 'think',
+  'same', 'separate', 'accidentally', 'mandala', 'sumi', 'shibori', 'watercolor', 'palette', 'knife',
+  'doodle', 'ink', 'cat', 'cats', 'visual', 'notes', 'note', 'class', 'masterclass', 'tell', 'tells',
+  'told', 'never', 'either', 'cannot', 'every', 'way', 'try', 'tried', 'its', 'had', 'put', 'say',
+  'said', 'ask', 'may', 'might', 'still', 'under', 'again', 'really', 'something', 'anything',
+  'someone', 'thing', 'things', 'much', 'many', 'more', 'most', 'other', 'another', 'because',
+  'since', 'while', 'where', 'who', 'whose', 'why', 'update', 'updated', 'version', 'wait', 'help',
+  'using', 'back',
+]);
+
+function extractKeywords(text: string): string[] {
+  const words = String(text || '').toLowerCase().match(/[a-z]{3,}/g) || [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const w of words) {
+    if (KEYWORD_STOPWORDS.has(w) || seen.has(w)) continue;
+    seen.add(w);
+    out.push(w);
+  }
+  return out.slice(0, 10);
+}
+
+/** Semantic-ish memory: the most relevant past (customer email -> owner reply)
+ *  pairs from the FULL history, matched by keyword relevance (Postgres text
+ *  search) and ranked by how many query keywords appear. No embeddings needed. */
+export async function getRelevantExamples(
+  supabase: SupabaseClient,
+  queryText: string,
+  limit = 6,
+): Promise<StyleExample[]> {
+  const keywords = extractKeywords(queryText);
+  if (keywords.length === 0) return [];
+  const ftsQuery = keywords.join(' OR ');
+
+  const { data: inbounds, error } = await supabase
+    .from('emails')
+    .select('message_id, text_body, subject')
+    .eq('direction', 'inbound')
+    .not('text_body', 'is', null)
+    .not('message_id', 'is', null)
+    .textSearch('text_body', ftsQuery, { type: 'websearch', config: 'english' })
+    .limit(50);
+  if (error || !inbounds || inbounds.length === 0) return [];
+
+  const mids = inbounds.map((i) => i.message_id).filter(Boolean) as string[];
+  const { data: replies } = await supabase
+    .from('emails')
+    .select('in_reply_to, text_body, subject')
+    .eq('direction', 'outbound')
+    .not('text_body', 'is', null)
+    .in('in_reply_to', mids);
+
+  const replyByMid = new Map<string, { text: string; subject: string | null }>();
+  for (const r of replies || []) {
+    const key = r.in_reply_to as string | null;
+    if (key && !replyByMid.has(key)) {
+      replyByMid.set(key, { text: r.text_body || '', subject: (r.subject as string | null) ?? null });
+    }
+  }
+
+  return inbounds
+    .filter((i) => i.message_id && replyByMid.has(i.message_id))
+    .map((i) => {
+      const customer = stripQuote(i.text_body);
+      const rep = replyByMid.get(i.message_id as string) as { text: string; subject: string | null };
+      const hay = customer.toLowerCase();
+      const score = keywords.reduce((n, k) => n + (hay.includes(k) ? 1 : 0), 0);
+      return {
+        score,
+        example: {
+          subject: rep.subject ?? ((i.subject as string | null) ?? null),
+          customer: customer.slice(0, 500),
+          reply: stripQuote(rep.text).slice(0, 700),
+        } as StyleExample,
+      };
+    })
+    .filter((p) => p.example.reply.length > 0 && p.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((p) => p.example);
 }
 
 /** Triage one inbound email, then either auto-send (if enabled + safe) or
@@ -361,7 +452,25 @@ export async function runTriageForEmail(
       .filter((m) => m.text.length > 0)
       .slice(-6);
 
-    const styleExamples = await getStyleExamples(supabase);
+    // Semantic-ish memory: pull the most relevant past pairs from the full
+    // history, then fill with recent replies so there is always some style.
+    const relevant = await getRelevantExamples(
+      supabase,
+      `${email.subject || ''} ${email.text_body || ''}`,
+    );
+    const styleExamples: StyleExample[] = [...relevant];
+    if (styleExamples.length < 3) {
+      const recent = await getStyleExamples(supabase);
+      const seen = new Set(styleExamples.map((e) => e.reply));
+      for (const r of recent) {
+        if (styleExamples.length >= 6) break;
+        if (!seen.has(r.reply)) {
+          styleExamples.push(r);
+          seen.add(r.reply);
+        }
+      }
+    }
+
     const result = await triageEmail({
       account,
       fromName: email.from_name,
