@@ -37,8 +37,17 @@ export interface TriageResult {
 
 export type AiStatus = 'needs_human' | 'auto_replied' | 'no_reply_needed' | 'error';
 
+// A real past (customer email -> owner reply) pair, used to teach the AI how the
+// owner handles situations, not just how they write.
 export interface StyleExample {
   subject: string | null;
+  customer: string;
+  reply: string;
+}
+
+// A prior message in the same thread as the email being triaged.
+export interface ThreadMessage {
+  role: 'customer' | 'owner';
   text: string;
 }
 
@@ -92,7 +101,15 @@ const TRIAGE_TOOL_SCHEMA: Anthropic.Tool['input_schema'] = {
   required: ['category', 'needs_human', 'confidence', 'reason', 'draft_reply'],
 };
 
-function systemPrompt(account: Account, examples: StyleExample[]): string {
+function stripQuote(text: string | null): string {
+  return String(text || '').split(/---+\s*On /)[0].trim();
+}
+
+function systemPrompt(
+  account: Account,
+  examples: StyleExample[],
+  thread: ThreadMessage[],
+): string {
   const brief = getBrief(account.id);
   const briefBlock = brief
     ? brief
@@ -131,16 +148,33 @@ function systemPrompt(account: Account, examples: StyleExample[]): string {
     '## VOICE GUIDE',
     getVoiceGuide(),
   ];
+
   if (examples.length) {
     lines.push(
       '',
-      '## HOW THE ACCOUNT OWNER ACTUALLY WRITES (real recent replies to learn from)',
-      'The replies below are real messages the account owner recently sent to customers. Study their tone, word choice, warmth, rhythm, and how they handle situations, and make your draft sound like the same person wrote it. This is your best and most current guide to their real voice. Still ALWAYS keep the required opening, the required closing, and the no-dash rule from above, regardless of what these examples show.',
-      ...examples.map(
-        (ex, i) => `--- Example ${i + 1}${ex.subject ? ` (re: ${ex.subject})` : ''} ---\n${ex.text}`,
-      ),
+      '## HOW THE OWNER HANDLES EMAILS (real past email + reply pairs to learn from)',
+      'Each pair below is a real customer email and the reply the account owner actually sent. Learn BOTH how the owner writes AND how they handle each kind of situation, and draft in the same way. These are your best and most current guide to the owner. Still ALWAYS keep the required opening, the required closing, and the no-dash rule from above.',
     );
+    examples.forEach((ex, i) => {
+      lines.push(
+        `--- Example ${i + 1}${ex.subject ? ` (re: ${ex.subject})` : ''} ---`,
+        ex.customer ? `Customer wrote:\n${ex.customer}` : 'Customer wrote: (original not on file)',
+        `The owner replied:\n${ex.reply}`,
+      );
+    });
   }
+
+  if (thread.length) {
+    lines.push(
+      '',
+      '## THIS CONVERSATION SO FAR (earlier messages in this same thread)',
+      'You and the customer have already exchanged messages in this thread. Write your draft as a continuation: do not repeat what the owner already said, do not contradict it, and address the customer\'s latest message specifically.',
+    );
+    thread.forEach((m) => {
+      lines.push(`--- ${m.role === 'owner' ? 'Owner (Aiko)' : 'Customer'} ---`, m.text);
+    });
+  }
+
   return lines.join('\n');
 }
 
@@ -169,6 +203,7 @@ export async function triageEmail(params: {
   subject: string | null;
   textBody: string | null;
   styleExamples?: StyleExample[];
+  threadContext?: ThreadMessage[];
 }): Promise<TriageResult> {
   const from = params.fromName
     ? `${params.fromName} <${params.fromAddress}>`
@@ -179,7 +214,7 @@ export async function triageEmail(params: {
   const resp = await anthropic().messages.create({
     model: MODEL,
     max_tokens: 1500,
-    system: systemPrompt(params.account, params.styleExamples || []),
+    system: systemPrompt(params.account, params.styleExamples || [], params.threadContext || []),
     messages: [{ role: 'user', content: userMessage }],
     tools: [
       {
@@ -227,31 +262,66 @@ function sanitizeDashes(text: string): string {
   );
 }
 
-/** Recent real replies the owner sent, used as live voice examples in the
- *  draft prompt so the AI learns to mimic how the owner writes. */
+/** All emails in the same thread as `email`, oldest first. */
+async function getThread(supabase: SupabaseClient, email: Email): Promise<Email[]> {
+  if (!email.thread_id) return [];
+  const { data } = await supabase
+    .from('emails')
+    .select('*')
+    .eq('thread_id', email.thread_id)
+    .order('created_at', { ascending: true });
+  return (data || []) as Email[];
+}
+
+/** Was this inbound email already replied to by the owner in its thread? */
+function findExistingOwnerReply(thread: Email[], email: Email): Email | null {
+  const t = new Date(email.created_at).getTime();
+  return (
+    thread.find(
+      (m) =>
+        m.id !== email.id &&
+        m.direction === 'outbound' &&
+        (m.in_reply_to === email.message_id ||
+          new Date(m.created_at).getTime() > t),
+    ) || null
+  );
+}
+
+/** Recent real (customer email -> owner reply) pairs, used as live learning
+ *  examples in the draft prompt so the AI mimics how the owner handles email. */
 export async function getStyleExamples(
   supabase: SupabaseClient,
   limit = 6,
 ): Promise<StyleExample[]> {
-  const { data, error } = await supabase
+  const { data: replies, error } = await supabase
     .from('emails')
-    .select('subject, text_body')
+    .select('subject, text_body, in_reply_to')
     .eq('direction', 'outbound')
     .not('in_reply_to', 'is', null)
     .not('text_body', 'is', null)
     .order('created_at', { ascending: false })
     .limit(limit);
-  if (error) return [];
-  return (data || [])
-    .map((e) => ({
-      subject: (e.subject as string | null) ?? null,
-      // Drop any quoted-original block so we learn only what the owner wrote.
-      text: String(e.text_body || '')
-        .split(/---+\s*On /)[0]
-        .trim()
-        .slice(0, 900),
+  if (error || !replies) return [];
+
+  const inReplyToIds = replies.map((r) => r.in_reply_to).filter(Boolean) as string[];
+  const originalByMid = new Map<string, string>();
+  if (inReplyToIds.length) {
+    const { data: originals } = await supabase
+      .from('emails')
+      .select('message_id, text_body')
+      .in('message_id', inReplyToIds);
+    for (const o of originals || []) {
+      if (o.message_id) originalByMid.set(o.message_id, o.text_body || '');
+    }
+  }
+
+  return replies
+    .map((r) => ({
+      subject: (r.subject as string | null) ?? null,
+      customer: stripQuote(originalByMid.get(r.in_reply_to as string) || '').slice(0, 500),
+      reply: stripQuote(r.text_body).slice(0, 700),
     }))
-    .filter((e) => e.text.length > 0);
+    .filter((p) => p.reply.length > 0);
 }
 
 /** Triage one inbound email, then either auto-send (if enabled + safe) or
@@ -262,6 +332,35 @@ export async function runTriageForEmail(
   account: Account,
 ): Promise<void> {
   try {
+    // First, look through the DB: if the owner already replied to this email in
+    // its thread, there is nothing to draft. Mark it replied and stop.
+    const thread = await getThread(supabase, email);
+    const existingReply = findExistingOwnerReply(thread, email);
+    if (existingReply) {
+      await supabase
+        .from('emails')
+        .update({
+          ai_status: 'auto_replied',
+          ai_reason: 'You already replied to this in the thread.',
+          ai_draft: stripQuote(existingReply.text_body).slice(0, 4000) || null,
+          ai_reply_email_id: existingReply.id,
+          ai_processed_at: new Date().toISOString(),
+        })
+        .eq('id', email.id);
+      return;
+    }
+
+    // Earlier messages in this thread (context for a follow-up).
+    const currentTime = new Date(email.created_at).getTime();
+    const threadContext: ThreadMessage[] = thread
+      .filter((m) => m.id !== email.id && new Date(m.created_at).getTime() <= currentTime)
+      .map((m) => ({
+        role: m.direction === 'outbound' ? ('owner' as const) : ('customer' as const),
+        text: stripQuote(m.text_body).slice(0, 600),
+      }))
+      .filter((m) => m.text.length > 0)
+      .slice(-6);
+
     const styleExamples = await getStyleExamples(supabase);
     const result = await triageEmail({
       account,
@@ -270,6 +369,7 @@ export async function runTriageForEmail(
       subject: email.subject,
       textBody: email.text_body,
       styleExamples,
+      threadContext,
     });
     const autoSendEnabled = await getAutoSend(supabase);
     const status = computeStatus(result, autoSendEnabled);
