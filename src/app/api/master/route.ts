@@ -16,10 +16,11 @@ export async function GET(req: NextRequest) {
       .eq('direction', 'inbound')
       .eq('is_trash', false);
 
-  const [nu, rp, nr, al] = await Promise.all([
+  const [nu, rp, nr, sp, al] = await Promise.all([
     countBase().in('ai_status', ['needs_human', 'error']),
     countBase().eq('ai_status', 'auto_replied'),
-    countBase().eq('ai_status', 'no_reply_needed'),
+    countBase().eq('ai_status', 'no_reply_needed').neq('ai_category', 'spam'),
+    countBase().eq('ai_category', 'spam'),
     countBase(),
   ]);
 
@@ -30,7 +31,9 @@ export async function GET(req: NextRequest) {
     .eq('is_trash', false);
 
   if (tab === 'replied') listQuery = listQuery.eq('ai_status', 'auto_replied');
-  else if (tab === 'no_reply') listQuery = listQuery.eq('ai_status', 'no_reply_needed');
+  else if (tab === 'spam') listQuery = listQuery.eq('ai_category', 'spam');
+  else if (tab === 'no_reply')
+    listQuery = listQuery.eq('ai_status', 'no_reply_needed').neq('ai_category', 'spam');
   else if (tab !== 'all') listQuery = listQuery.in('ai_status', ['needs_human', 'error']);
 
   const { data, error } = await listQuery
@@ -75,7 +78,7 @@ export async function GET(req: NextRequest) {
 
   const autoSend = await getAutoSend(supabase);
   return NextResponse.json({
-    counts: { needs_you: nu.count || 0, replied: rp.count || 0, no_reply: nr.count || 0, all: al.count || 0 },
+    counts: { needs_you: nu.count || 0, replied: rp.count || 0, no_reply: nr.count || 0, spam: sp.count || 0, all: al.count || 0 },
     autoSend,
     emails,
   });

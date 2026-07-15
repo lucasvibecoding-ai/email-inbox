@@ -25,6 +25,7 @@ interface Counts {
   needs_you: number;
   replied: number;
   no_reply: number;
+  spam: number;
   all: number;
 }
 
@@ -32,6 +33,7 @@ const TABS: { id: keyof Counts; label: string }[] = [
   { id: 'needs_you', label: 'Needs you' },
   { id: 'replied', label: 'Replied' },
   { id: 'no_reply', label: 'No reply' },
+  { id: 'spam', label: 'Spam' },
   { id: 'all', label: 'All' },
 ];
 
@@ -69,7 +71,7 @@ function escapeHtml(s: string): string {
 
 export default function MasterView() {
   const [tab, setTab] = useState<keyof Counts>('needs_you');
-  const [counts, setCounts] = useState<Counts>({ needs_you: 0, replied: 0, no_reply: 0, all: 0 });
+  const [counts, setCounts] = useState<Counts>({ needs_you: 0, replied: 0, no_reply: 0, spam: 0, all: 0 });
   const [emails, setEmails] = useState<MasterEmail[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
