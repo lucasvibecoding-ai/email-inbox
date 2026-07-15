@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
+import { getAttachmentsByEmail } from '@/lib/attachments';
 
 // GET /api/emails/[id] - Get single email
 export async function GET(
@@ -29,7 +30,15 @@ export async function GET(
     .eq('thread_id', data.thread_id)
     .order('created_at', { ascending: true });
 
-  return NextResponse.json({ email: data, thread: thread || [] });
+  const threadRows = thread || [];
+  const attByEmail = await getAttachmentsByEmail(supabase, [
+    data.id,
+    ...threadRows.map((t) => t.id),
+  ]);
+  data.attachments = attByEmail[data.id] || [];
+  for (const t of threadRows) t.attachments = attByEmail[t.id] || [];
+
+  return NextResponse.json({ email: data, thread: threadRows });
 }
 
 // PATCH /api/emails/[id] - Update email flags

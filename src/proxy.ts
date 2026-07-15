@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifySession } from '@/lib/session';
 
-const PUBLIC_PREFIXES = ['/login', '/api/auth/login', '/api/webhook', '/api/triage'];
+const PUBLIC_PREFIXES = ['/login', '/api/auth/login', '/api/webhook', '/api/triage', '/api/attachments/backfill'];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

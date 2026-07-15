@@ -2,6 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { getAccountByEmail, getAccounts } from '@/lib/accounts';
 import { runTriageForEmail } from '@/lib/triage';
+import { captureAttachments } from '@/lib/attachments';
 import { Email } from '@/lib/types';
 import { Webhook } from 'svix';
 
@@ -115,6 +116,11 @@ export async function POST(req: NextRequest) {
     // Only when we can map the recipient to a known course account.
     if (matchedAccount && inserted) {
       after(() => runTriageForEmail(supabase, inserted as Email, matchedAccount));
+      if (emailId) {
+        after(() =>
+          captureAttachments(supabase, matchedAccount.resendApiKey, emailId, inserted.id),
+        );
+      }
     }
 
     return NextResponse.json({ success: true });

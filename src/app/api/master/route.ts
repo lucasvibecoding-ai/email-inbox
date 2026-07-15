@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { getAccountByEmail } from '@/lib/accounts';
 import { getAutoSend } from '@/lib/settings';
+import { getAttachmentsByEmail } from '@/lib/attachments';
 
 // GET /api/master?tab=needs_you|replied|no_reply|all
 // Cross-account view of inbound email with its AI triage state, for the Master View.
@@ -44,6 +45,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const attByEmail = await getAttachmentsByEmail(supabase, (data || []).map((e) => e.id));
+
   const emails = (data || []).map((e) => {
     const account =
       (e.to_addresses || []).map(getAccountByEmail).find(Boolean) || null;
@@ -73,6 +76,7 @@ export async function GET(req: NextRequest) {
             domain: account.domain,
           }
         : null,
+      attachments: attByEmail[e.id] || [],
     };
   });
 

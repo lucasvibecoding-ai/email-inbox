@@ -19,6 +19,7 @@ interface MasterEmail {
   ai_draft: string | null;
   ai_reason: string | null;
   account: { id: string; displayName: string; email: string; domain: string } | null;
+  attachments?: { id: string; filename: string | null; content_type: string | null; size: number | null }[];
 }
 
 interface Counts {
@@ -272,6 +273,9 @@ export default function MasterView() {
                       <span className="text-[var(--foreground)]">{e.subject || '(no subject)'}</span>
                       <span className="text-[var(--muted)]"> — {e.preview}</span>
                     </span>
+                    {(e.attachments?.length ?? 0) > 0 && (
+                      <span className="shrink-0 text-xs" title="Has attachments">📎</span>
+                    )}
                     <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded-full font-medium ${meta.cls}`}>
                       {meta.label}
                     </span>
@@ -294,6 +298,21 @@ export default function MasterView() {
                         <div className="text-sm whitespace-pre-wrap text-[var(--foreground)] max-h-72 overflow-y-auto">
                           {e.text_body || e.preview || '(no body)'}
                         </div>
+                        {(e.attachments?.length ?? 0) > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border)] pt-3">
+                            {e.attachments!.map((a) => (
+                              <a
+                                key={a.id}
+                                href={`/api/attachments/${a.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--hover)] text-[var(--primary)]"
+                              >
+                                📎 {a.filename || 'attachment'}
+                              </a>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       {/* AI reply */}

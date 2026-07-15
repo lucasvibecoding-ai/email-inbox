@@ -18,6 +18,7 @@ export interface Email {
   in_reply_to: string | null;
   references: string[] | null;
   created_at: string;
+  attachments?: { id: string; filename: string | null; content_type: string | null; size: number | null }[];
 }
 
 export interface Attachment {

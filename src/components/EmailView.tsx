@@ -95,6 +95,22 @@ export default function EmailView({ email, thread, onReply, onArchive, onTrash, 
                 {showHtml ? 'Show plain text' : 'Show HTML'}
               </button>
             )}
+
+            {msg.attachments && msg.attachments.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border)] pt-3">
+                {msg.attachments.map((a) => (
+                  <a
+                    key={a.id}
+                    href={`/api/attachments/${a.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--hover)] text-[var(--primary)]"
+                  >
+                    📎 {a.filename || 'attachment'}
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>
