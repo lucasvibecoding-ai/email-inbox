@@ -5,6 +5,8 @@ import type { Email } from './types';
 import { getVoiceGuide, getPlatformFacts, getBrief } from './knowledge';
 import { getAutoSend } from './settings';
 import { sendReply } from './send';
+import { notifyNeedsYou } from './notify';
+import { getAttachmentsByEmail } from './attachments';
 
 export type TriageCategory =
   | 'access_help'
@@ -415,6 +417,32 @@ export async function getRelevantExamples(
     .map((p) => p.example);
 }
 
+/** Send the phone push for an email that just entered "Needs you". Best effort:
+ *  looks up attachments (may not be captured yet, that is fine) and never throws. */
+async function fireNeedsYouAlert(
+  supabase: SupabaseClient,
+  email: Email,
+  account: Account,
+  category: string | null,
+  reason: string | null,
+): Promise<void> {
+  try {
+    const attByEmail = await getAttachmentsByEmail(supabase, [email.id]);
+    await notifyNeedsYou({
+      account,
+      fromName: email.from_name,
+      fromAddress: email.from_address,
+      subject: email.subject,
+      body: email.text_body,
+      category,
+      reason,
+      attachments: attByEmail[email.id] || [],
+    });
+  } catch (err) {
+    console.error('needs-you alert failed for', email.id, err);
+  }
+}
+
 /** Triage one inbound email, then either auto-send (if enabled + safe) or
  *  leave a draft. Writes the ai_* fields back to the row either way. */
 export async function runTriageForEmail(
@@ -524,6 +552,7 @@ export async function runTriageForEmail(
             ai_reason: `${result.reason || ''} [auto-send failed: ${(sendErr instanceof Error ? sendErr.message : 'error').slice(0, 150)}]`,
           })
           .eq('id', email.id);
+        await fireNeedsYouAlert(supabase, email, account, result.category, 'Auto-send failed, needs manual send');
         return;
       }
     }
@@ -532,6 +561,9 @@ export async function runTriageForEmail(
       .from('emails')
       .update({ ...baseFields, ai_status: status })
       .eq('id', email.id);
+    if (status === 'needs_human') {
+      await fireNeedsYouAlert(supabase, email, account, result.category, result.reason);
+    }
   } catch (err) {
     console.error('Triage failed for email', email.id, err);
     await supabase
@@ -542,5 +574,6 @@ export async function runTriageForEmail(
         ai_processed_at: new Date().toISOString(),
       })
       .eq('id', email.id);
+    await fireNeedsYouAlert(supabase, email, account, null, 'Triage error, needs manual handling');
   }
 }
