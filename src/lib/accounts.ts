@@ -83,6 +83,14 @@ export function getAccounts(): Account[] {
       domain: 'inkcatclass.com',
       resendApiKey: process.env.RESEND_API_KEY_INKCATCLASS!,
     },
+    {
+      id: 'bulletjournalclass',
+      email: 'hello@bulletjournalclass.com',
+      senderName: 'Aiko Mori',
+      displayName: 'Aiko Mori - Bullet Journal',
+      domain: 'bulletjournalclass.com',
+      resendApiKey: process.env.RESEND_API_KEY_BULLETJOURNALCLASS!,
+    },
   ];
 }
 
