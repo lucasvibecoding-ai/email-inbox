@@ -91,6 +91,22 @@ export function getAccounts(): Account[] {
       domain: 'bulletjournalclass.com',
       resendApiKey: process.env.RESEND_API_KEY_BULLETJOURNALCLASS!,
     },
+    {
+      id: 'chineseinkclass',
+      email: 'hello@chineseinkclass.com',
+      senderName: 'Aiko Mori',
+      displayName: 'Chinese Ink - Aiko Mori',
+      domain: 'chineseinkclass.com',
+      resendApiKey: process.env.RESEND_API_KEY_CHINESEINKCLASS!,
+    },
+    {
+      id: 'classicartclass',
+      email: 'hello@classicartclass.com',
+      senderName: 'Aiko Mori',
+      displayName: 'Famous Painters - Aiko Mori',
+      domain: 'classicartclass.com',
+      resendApiKey: process.env.RESEND_API_KEY_CLASSICARTCLASS!,
+    },
   ];
 }
 
