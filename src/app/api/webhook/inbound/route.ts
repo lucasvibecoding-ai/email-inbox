@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
       process.env.WEBHOOK_SECRET_PALETTEKNIFECLASS,
       process.env.WEBHOOK_SECRET_JAPANESEDOODLECLASS,
       process.env.WEBHOOK_SECRET_INKCATCLASS,
+      // Also covers tiledoodling.com, which shares this Resend webhook.
       process.env.WEBHOOK_SECRET_BULLETJOURNALCLASS,
       process.env.WEBHOOK_SECRET_CHINESEINKCLASS,
       process.env.WEBHOOK_SECRET_CLASSICARTCLASS,
