@@ -89,10 +89,7 @@ export function getAccounts(): Account[] {
       senderName: 'Aiko Mori',
       displayName: 'Aiko Mori - Tile Doodling',
       domain: 'tiledoodling.com',
-      // Replaced the bullet journal account. tiledoodling.com was added to the
-      // same Resend account, so it reuses that account's existing API key and
-      // inbound webhook secret; the env var names are historical, not a typo.
-      resendApiKey: process.env.RESEND_API_KEY_BULLETJOURNALCLASS!,
+      resendApiKey: process.env.RESEND_API_KEY_TILEDOODLING!,
     },
     {
       id: 'chineseinkclass',
