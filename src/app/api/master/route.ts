@@ -4,6 +4,12 @@ import { getAccountByEmail } from '@/lib/accounts';
 import { getAutoSend } from '@/lib/settings';
 import { getAttachmentsByEmail } from '@/lib/attachments';
 
+// Must stay a single string literal: supabase-js infers the row type from the
+// literal, and building it with join() widens it to `string` and erases the
+// types. Mirrors the fields mapped in the response below.
+const LIST_COLUMNS =
+  'id,message_id,from_address,from_name,to_addresses,subject,text_body,created_at,references,is_archived,ai_status,ai_category,ai_confidence,ai_draft,ai_reason,ai_processed_at';
+
 // GET /api/master?tab=needs_you|replied|no_reply|all
 // Cross-account view of inbound email with its AI triage state, for the Master View.
 export async function GET(req: NextRequest) {
@@ -25,9 +31,14 @@ export async function GET(req: NextRequest) {
     countBase(),
   ]);
 
+  // Only the columns this view maps below. html_body is deliberately absent:
+  // it is the biggest column in the table and pulling it for 200 rows on every
+  // poll was the single largest source of Supabase egress in this project. The
+  // handful of rows that genuinely need it for their preview are topped up in a
+  // second, much smaller query further down.
   let listQuery = supabase
     .from('emails')
-    .select('*')
+    .select(LIST_COLUMNS)
     .eq('direction', 'inbound')
     .eq('is_trash', false);
 
@@ -45,9 +56,32 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const attByEmail = await getAttachmentsByEmail(supabase, (data || []).map((e) => e.id));
+  const rows = data || [];
 
-  const emails = (data || []).map((e) => {
+  // About 7% of inbound mail arrives with no text_body at all, so its preview
+  // can only come from the HTML. Those bodies are big, so fetch html_body only
+  // for the rows that need it AND that we have not already previewed. An
+  // email's body never changes after insert, so a cached preview stays valid
+  // for the life of the instance and repeat polls cost nothing.
+  const uncached = rows
+    .filter((e) => !e.text_body && !previewCache.has(e.id))
+    .map((e) => e.id);
+  if (uncached.length) {
+    const { data: htmlRows } = await supabase
+      .from('emails')
+      .select('id,html_body')
+      .in('id', uncached);
+    for (const r of htmlRows || []) {
+      rememberPreview(r.id, makePreview(null, r.html_body));
+    }
+    // Anything the query did not return still gets an entry, so a row with no
+    // body at all is not re-fetched on every single poll.
+    for (const id of uncached) if (!previewCache.has(id)) rememberPreview(id, '');
+  }
+
+  const attByEmail = await getAttachmentsByEmail(supabase, rows.map((e) => e.id));
+
+  const emails = rows.map((e) => {
     const account =
       (e.to_addresses || []).map(getAccountByEmail).find(Boolean) || null;
     return {
@@ -58,7 +92,7 @@ export async function GET(req: NextRequest) {
       to_addresses: e.to_addresses,
       subject: e.subject,
       text_body: e.text_body,
-      preview: makePreview(e.text_body, e.html_body),
+      preview: e.text_body ? makePreview(e.text_body, null) : previewCache.get(e.id) || '',
       created_at: e.created_at,
       references: e.references,
       is_archived: e.is_archived,
@@ -86,6 +120,21 @@ export async function GET(req: NextRequest) {
     autoSend,
     emails,
   });
+}
+
+// Previews for bodies that only exist as HTML, keyed by email id. Bounded so a
+// long-lived instance cannot grow without limit; entries are pure derived data,
+// so evicting one only costs a re-fetch.
+const PREVIEW_CACHE_MAX = 2000;
+const previewCache = new Map<string, string>();
+
+function rememberPreview(id: string, preview: string): void {
+  previewCache.set(id, preview);
+  while (previewCache.size > PREVIEW_CACHE_MAX) {
+    const oldest = previewCache.keys().next().value;
+    if (oldest === undefined) break;
+    previewCache.delete(oldest);
+  }
 }
 
 function makePreview(text: string | null, html: string | null): string {

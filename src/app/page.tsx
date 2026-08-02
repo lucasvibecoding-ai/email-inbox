@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar, { AccountInfo } from '@/components/Sidebar';
 import EmailList from '@/components/EmailList';
 import EmailView from '@/components/EmailView';
@@ -19,6 +19,7 @@ export default function Home() {
   const [replyTo, setReplyTo] = useState<Email | null>(null);
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState('');
+  const selectedIdRef = useRef<string | null>(null);
 
   // Fetch accounts on mount
   useEffect(() => {
@@ -45,18 +46,35 @@ export default function Home() {
     fetchEmails();
   }, [fetchEmails]);
 
-  // Poll for new emails every 15s
+  // Poll for new emails every 60s. Was 15s, which on a tab left open all day
+  // was on its own enough to blow through the Supabase egress quota.
   useEffect(() => {
-    const interval = setInterval(fetchEmails, 15000);
+    const interval = setInterval(fetchEmails, 60000);
     return () => clearInterval(interval);
   }, [fetchEmails]);
 
   const selectEmail = async (email: Email) => {
+    // Show the list row immediately, then swap in the full record. The list
+    // query omits html_body and attachments to keep polling cheap, so the
+    // reading pane has to use the row from /api/emails/[id].
+    selectedIdRef.current = email.id;
     setSelectedEmail(email);
+    setThread([]);
     const res = await fetch(`/api/emails/${email.id}`);
     const data = await res.json();
+    // Ignore a response that lost the race to a newer click.
+    if (selectedIdRef.current !== email.id) return;
+    if (data.email) setSelectedEmail(data.email);
     setThread(data.thread || []);
     setEmails((prev) => prev.map((e) => (e.id === email.id ? { ...e, is_read: true } : e)));
+  };
+
+  // Clearing the ref too, so an in-flight selectEmail response cannot
+  // resurrect an email the user just archived, trashed or navigated away from.
+  const clearSelection = () => {
+    selectedIdRef.current = null;
+    setSelectedEmail(null);
+    setThread([]);
   };
 
   const handleStar = async (id: string, starred: boolean) => {
@@ -74,7 +92,7 @@ export default function Home() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_archived: true }),
     });
-    setSelectedEmail(null);
+    clearSelection();
     fetchEmails();
   };
 
@@ -84,7 +102,7 @@ export default function Home() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_trash: true }),
     });
-    setSelectedEmail(null);
+    clearSelection();
     fetchEmails();
   };
 
@@ -124,7 +142,7 @@ export default function Home() {
 
   const handleAccountChange = (accountId: string) => {
     setCurrentAccount(accountId);
-    setSelectedEmail(null);
+    clearSelection();
   };
 
   return (
@@ -133,7 +151,7 @@ export default function Home() {
         currentFolder={folder}
         onFolderChange={(f) => {
           setFolder(f);
-          setSelectedEmail(null);
+          clearSelection();
         }}
         onCompose={() => {
           setReplyTo(null);
@@ -174,7 +192,7 @@ export default function Home() {
               onReply={handleReply}
               onArchive={handleArchive}
               onTrash={handleTrash}
-              onBack={() => setSelectedEmail(null)}
+              onBack={clearSelection}
             />
           ) : (
             <div className="flex-1 flex items-center justify-center text-[var(--muted)]">

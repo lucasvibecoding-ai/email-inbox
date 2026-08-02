@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { getAccount, getAccounts, getResendClient } from '@/lib/accounts';
 
+// Must stay a single string literal: supabase-js infers the row type from the
+// literal, and building it with join() widens it to `string` and erases the
+// types.
+const LIST_COLUMNS =
+  'id,message_id,thread_id,from_address,from_name,to_addresses,cc_addresses,bcc_addresses,subject,text_body,direction,is_read,is_starred,is_archived,is_trash,in_reply_to,references,created_at';
+
 // GET /api/emails?folder=inbox|sent|starred|archived|trash&account=id
 export async function GET(req: NextRequest) {
   const folder = req.nextUrl.searchParams.get('folder') || 'inbox';
@@ -10,9 +16,14 @@ export async function GET(req: NextRequest) {
   const account = getAccount(accountId);
   const supabase = getServiceClient();
 
+  // Every column the list UI needs, minus html_body. The list only renders a
+  // 100-char text_body snippet, but html_body is the largest column by far and
+  // fetching it for 50 rows on every poll dominated this project's Supabase
+  // egress. The full row, html_body included, comes from GET /api/emails/[id]
+  // when a message is actually opened.
   let query = supabase
     .from('emails')
-    .select('*')
+    .select(LIST_COLUMNS)
     .order('created_at', { ascending: false });
 
   // Filter by account

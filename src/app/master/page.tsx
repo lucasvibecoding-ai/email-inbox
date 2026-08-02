@@ -96,8 +96,10 @@ export default function MasterView() {
     fetchData();
   }, [fetchData]);
 
+  // 60s, not 15s. This view pulls 200 rows per poll, so it was the single
+  // biggest consumer of the Supabase egress quota.
   useEffect(() => {
-    const interval = setInterval(fetchData, 15000);
+    const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
