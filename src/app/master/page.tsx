@@ -96,11 +96,37 @@ export default function MasterView() {
     fetchData();
   }, [fetchData]);
 
-  // 60s, not 15s. This view pulls 200 rows per poll, so it was the single
-  // biggest consumer of the Supabase egress quota.
+  // Poll every 15s, but only while the tab is on screen. This view pulls 200
+  // rows per poll and was the single biggest consumer of the Supabase egress
+  // quota when left open in a background tab. Switching back to it refreshes
+  // immediately. Telegram alerts are unaffected: they are sent server-side
+  // from the inbound webhook, not from this poll.
   useEffect(() => {
-    const interval = setInterval(fetchData, 60000);
-    return () => clearInterval(interval);
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (interval === null) interval = setInterval(fetchData, 15000);
+    };
+    const stop = () => {
+      if (interval !== null) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchData();
+        start();
+      } else {
+        stop();
+      }
+    };
+    // No fetch here: the effect above already loads on mount and on tab change.
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      stop();
+    };
   }, [fetchData]);
 
   const toggle = (e: MasterEmail) => {

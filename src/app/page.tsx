@@ -46,11 +46,39 @@ export default function Home() {
     fetchEmails();
   }, [fetchEmails]);
 
-  // Poll for new emails every 60s. Was 15s, which on a tab left open all day
-  // was on its own enough to blow through the Supabase egress quota.
+  // Poll every 15s, but only while the tab is actually on screen. This used to
+  // poll around the clock, and a tab left open 24/7 was on its own enough to
+  // exhaust the Supabase egress quota. Returning to the tab refreshes straight
+  // away, so what you see is never stale. New mail still reaches you while the
+  // tab is hidden: the Telegram alert is sent server-side from the inbound
+  // webhook and does not depend on this poll.
   useEffect(() => {
-    const interval = setInterval(fetchEmails, 60000);
-    return () => clearInterval(interval);
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (interval === null) interval = setInterval(fetchEmails, 15000);
+    };
+    const stop = () => {
+      if (interval !== null) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchEmails();
+        start();
+      } else {
+        stop();
+      }
+    };
+    // No fetch here: the effect above already loads on mount and whenever the
+    // folder, account or search changes.
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      stop();
+    };
   }, [fetchEmails]);
 
   const selectEmail = async (email: Email) => {
