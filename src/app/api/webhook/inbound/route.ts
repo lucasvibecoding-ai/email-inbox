@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       process.env.WEBHOOK_SECRET_INKCATCLASS,
       process.env.WEBHOOK_SECRET_TILEDOODLING,
       process.env.WEBHOOK_SECRET_CHINESEINKCLASS,
-      process.env.WEBHOOK_SECRET_CLASSICARTCLASS,
+      process.env.WEBHOOK_SECRET_ACRYLICCATCLASS,
     ].filter(Boolean) as string[];
 
     if (secrets.length > 0) {

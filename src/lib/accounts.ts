@@ -100,12 +100,12 @@ export function getAccounts(): Account[] {
       resendApiKey: process.env.RESEND_API_KEY_CHINESEINKCLASS!,
     },
     {
-      id: 'classicartclass',
-      email: 'hello@classicartclass.com',
+      id: 'acryliccatclass',
+      email: 'hello@acryliccatclass.com',
       senderName: 'Aiko Mori',
-      displayName: 'Famous Painters - Aiko Mori',
-      domain: 'classicartclass.com',
-      resendApiKey: process.env.RESEND_API_KEY_CLASSICARTCLASS!,
+      displayName: 'Acrylic Cats - Aiko Mori',
+      domain: 'acryliccatclass.com',
+      resendApiKey: process.env.RESEND_API_KEY_ACRYLICCATCLASS!,
     },
   ];
 }
