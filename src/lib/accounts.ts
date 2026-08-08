@@ -107,6 +107,14 @@ export function getAccounts(): Account[] {
       domain: 'acryliccatclass.com',
       resendApiKey: process.env.RESEND_API_KEY_ACRYLICCATCLASS!,
     },
+    {
+      id: 'bibledoodlingclass',
+      email: 'hello@bibledoodlingclass.com',
+      senderName: 'Grace Bennett',
+      displayName: 'Grace Bennett - Bible Doodling',
+      domain: 'bibledoodlingclass.com',
+      resendApiKey: process.env.RESEND_API_KEY_BIBLEDOODLINGCLASS!,
+    },
   ];
 }
 
