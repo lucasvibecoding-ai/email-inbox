@@ -97,7 +97,7 @@ const TRIAGE_TOOL_SCHEMA: Anthropic.Tool['input_schema'] = {
     draft_reply: {
       type: 'string',
       description:
-        "The reply to the customer, written in Aiko Mori's voice per the VOICE GUIDE. Use an empty string for spam.",
+        "The reply to the customer, written in the support persona's voice per the VOICE GUIDE. Use an empty string for spam.",
     },
   },
   required: ['category', 'needs_human', 'confidence', 'reason', 'draft_reply'],
@@ -107,17 +107,62 @@ function stripQuote(text: string | null): string {
   return String(text || '').split(/---+\s*On /)[0].trim();
 }
 
+/**
+ * Who the draft is written as. Taken from the account rather than hardcoded:
+ * most sites are Aiko Mori, but not all of them are.
+ */
+interface Persona {
+  full: string;
+  first: string;
+}
+
+function getPersona(account: Account): Persona {
+  // Some senderNames carry a course suffix ("Aiko Mori - Sumie") because that
+  // is what shows in the From line. The persona is only the person part, so
+  // drop anything after a dash separator; without this those accounts read as
+  // a different person and their voice guide gets rewritten.
+  const full = account.senderName.split(/\s+[-–—]\s+/)[0].trim();
+  return { full, first: full.split(/\s+/)[0] || full };
+}
+
+const DEFAULT_PERSONA = 'Aiko Mori';
+
+/**
+ * The shared voice guide is written about Aiko Mori by name, including the
+ * required sign-off and the verbatim snippets. For any other persona those
+ * names would leak into the draft, so swap them out. Accounts that really are
+ * Aiko get the guide back untouched, so their prompts are byte-for-byte what
+ * they were before personas existed.
+ */
+function personalizeVoiceGuide(guide: string, persona: Persona): string {
+  if (persona.full === DEFAULT_PERSONA) return guide;
+  const [defaultFirst] = DEFAULT_PERSONA.split(' ');
+  // "Aiko Arts" is the platform's brand name, not the persona, so it must
+  // survive the swap. Park it before substituting and put it back after.
+  const BRAND = 'Aiko Arts';
+  const BRAND_TOKEN = '\uE000BRAND\uE001'; // private-use chars, cannot occur in the guide
+  return guide
+    .split(BRAND)
+    .join(BRAND_TOKEN)
+    .replace(new RegExp(DEFAULT_PERSONA, 'g'), persona.full)
+    // Bare first name, but not when it is part of a longer word.
+    .replace(new RegExp(`\\b${defaultFirst}\\b`, 'g'), persona.first)
+    .split(BRAND_TOKEN)
+    .join(BRAND);
+}
+
 function systemPrompt(
   account: Account,
   examples: StyleExample[],
   thread: ThreadMessage[],
 ): string {
+  const persona = getPersona(account);
   const brief = getBrief(account.id);
   const briefBlock = brief
     ? brief
     : 'No course brief is available for this address. Escalate everything to a human (needs_human = true) and do not attempt a substantive answer.';
   const lines = [
-    `You are the customer-support assistant for the online course "${account.displayName}". You reply to emails sent to ${account.email}, writing AS the course's support persona (Aiko Mori). For each incoming email you do two things: (1) triage it into a category, and (2) draft a reply. You MUST call the record_triage tool with your result.`,
+    `You are the customer-support assistant for the online course "${account.displayName}". You reply to emails sent to ${account.email}, writing AS the course's support persona, ${persona.full}. You are ${persona.full} and no one else: never sign, name, or refer to yourself as any other person, whatever names appear in the guides below. For each incoming email you do two things: (1) triage it into a category, and (2) draft a reply. You MUST call the record_triage tool with your result.`,
     '',
     '## Grounding and safety (critical)',
     '- Use ONLY facts in the COURSE BRIEF, PLATFORM FACTS, and VOICE GUIDE below. Never invent prices, dates, policies, URLs, order details, or account specifics.',
@@ -133,7 +178,7 @@ function systemPrompt(
     '  If no sender name is available, use "Hi there," as the first line. This opening is fixed and overrides any greeting in the VOICE GUIDE.',
     '- REQUIRED closing. End every reply with exactly these two lines:',
     '    Best regards,',
-    '    Aiko',
+    `    ${persona.first}`,
     '  This sign-off is fixed and overrides any sign-off in the VOICE GUIDE.',
     '- Between the opening and the closing, answer in the persona voice (see VOICE GUIDE): warm, first person, short paragraphs.',
     '- Never use a dash or hyphen of any kind (the characters —, –, or -) as punctuation or in ordinary wording. Write compound terms as separate words instead (for example: step by step, self paced, one time, sign in). Keep the hyphen ONLY in: literal strings you must quote exactly (the login URL, an email address, an exact subject line) and proper names whose standard spelling includes a hyphen (for example sumi-e).',
@@ -148,7 +193,7 @@ function systemPrompt(
     getPlatformFacts(),
     '',
     '## VOICE GUIDE',
-    getVoiceGuide(),
+    personalizeVoiceGuide(getVoiceGuide(), persona),
   ];
 
   if (examples.length) {
@@ -173,7 +218,7 @@ function systemPrompt(
       'You and the customer have already exchanged messages in this thread. Write your draft as a continuation: do not repeat what the owner already said, do not contradict it, and address the customer\'s latest message specifically.',
     );
     thread.forEach((m) => {
-      lines.push(`--- ${m.role === 'owner' ? 'Owner (Aiko)' : 'Customer'} ---`, m.text);
+      lines.push(`--- ${m.role === 'owner' ? `Owner (${persona.first})` : 'Customer'} ---`, m.text);
     });
   }
 
