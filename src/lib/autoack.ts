@@ -34,34 +34,24 @@ export interface AckDecision {
   reason: string;
 }
 
-function firstName(fromName: string | null): string | null {
-  const n = (fromName || '').trim();
-  if (!n || n.includes('@')) return null;
-  const first = n.split(/\s+/)[0].replace(/[",]/g, '').trim();
-  return first.length > 1 ? first : null;
-}
-
-function personFirstName(account: Account): string {
-  const full = account.senderName.split(/\s+[-–—]\s+/)[0].trim();
-  return full.split(/\s+/)[0] || full;
-}
-
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-export function ackBody(email: Email, account: Account): { text: string; html: string } {
-  const who = firstName(email.from_name);
+/**
+ * The acknowledgement text. Fixed for every account and every sender: no
+ * recipient name in the greeting and no sign-off, so it reads as a short
+ * automatic receipt rather than a personal reply. The persona is still
+ * visible to the recipient in the From line.
+ */
+export function ackBody(): { text: string; html: string } {
   const text = [
-    who ? `Hi ${who},` : 'Hi there,',
+    'Hi,',
     'thanks for the email.',
     '',
     'This is just a quick note to let you know your message arrived safely.',
     '',
     'I read every email myself, so this one is with me now and I will get back to you as soon as I can, usually within one business day.',
-    '',
-    'Best regards,',
-    personFirstName(account),
   ].join('\n');
   const html = `<div style="font-family: sans-serif; white-space: pre-wrap;">${escapeHtml(
     text,
@@ -147,7 +137,7 @@ export async function maybeSendAck(
       .limit(1);
     if (recent && recent.length) return null;
 
-    const { text, html } = ackBody(email, account);
+    const { text, html } = ackBody();
     const subject = email.subject?.trim()
       ? /^re:/i.test(email.subject.trim())
         ? email.subject.trim()
