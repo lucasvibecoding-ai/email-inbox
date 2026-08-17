@@ -216,7 +216,9 @@ export default function MasterView() {
     try {
       // GET returns the whole thread oldest first AND marks the email read,
       // which is what the PATCH this replaces used to do on its own.
-      const res = await fetch(`/api/emails/${e.id}`);
+      // light=1: this view renders plain text only, so it must not pull
+      // html_body for the whole conversation.
+      const res = await fetch(`/api/emails/${e.id}?light=1`);
       const data = await res.json();
       if (expandedIdRef.current !== e.id) return; // a newer row was opened
       const rows: ThreadEmail[] = Array.isArray(data.thread) ? data.thread : [];

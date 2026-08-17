@@ -29,6 +29,22 @@ const AUTOMATED_SENDER =
 const AUTOMATED_SUBJECT =
   /^\s*(re:\s*)?(out of office|automatic reply|auto[- ]?reply|autoreply|automatic response|undeliverable|delivery status notification|mail delivery (failed|subsystem)|returned mail|read receipt|abwesenheit|réponse automatique)/i;
 
+/**
+ * Reply and forward prefixes, across the languages this mailbox actually sees.
+ * Re/Res, Fw/Fwd, German Aw/Antwort, French Rép, Italian Rif, Spanish Rv.
+ */
+const REPLY_SUBJECT = /^\s*(re|res|fw|fwd|aw|antwort|rép|rep|rif|rv)\s*(\[\d+\])?\s*:/i;
+
+/** Subject with every reply/forward prefix stripped, for matching. */
+export function normalizeSubject(subject: string | null): string {
+  let s = (subject || '').trim();
+  // Strip repeatedly: "Re: Fwd: Re: x" is still about x.
+  for (let i = 0; i < 6 && REPLY_SUBJECT.test(s); i++) {
+    s = s.replace(REPLY_SUBJECT, '').trim();
+  }
+  return s.toLowerCase().replace(/\s+/g, ' ');
+}
+
 export interface AckDecision {
   send: boolean;
   reason: string;
@@ -75,9 +91,17 @@ export function ackEligibility(
   if (email.is_trash) return { send: false, reason: 'trashed' };
 
   // A reply belongs to a conversation already under way.
+  //
+  // The header fields are checked first but cannot be relied on: the inbound
+  // webhook has no In-Reply-To to store, so every incoming email has a null
+  // here and a customer's reply looks exactly like first contact. The subject
+  // prefix is what actually catches replies today.
   if (email.in_reply_to) return { send: false, reason: 'is a reply (in_reply_to set)' };
   if (email.references && email.references.length > 0) {
     return { send: false, reason: 'is a reply (references set)' };
+  }
+  if (REPLY_SUBJECT.test(email.subject || '')) {
+    return { send: false, reason: 'is a reply (subject prefix)' };
   }
 
   const ageMin = ((opts.now ?? Date.now()) - new Date(email.created_at).getTime()) / 60000;
@@ -114,28 +138,60 @@ export async function maybeSendAck(
     const verdict = ackEligibility(email, account, category, opts);
     if (!verdict.send) return null;
 
-    // Anything already sent in this thread means the conversation is handled,
-    // including an acknowledgement we sent a moment ago.
-    if (email.thread_id) {
-      const { data: prior } = await supabase
+    // Deliberately NOT keyed on thread_id: inbound mail never joins a thread
+    // (see the note in ackEligibility), so a thread lookup would say "new
+    // conversation" every single time.
+    const [{ data: fromThem }, { data: toThem }] = await Promise.all([
+      supabase
         .from('emails')
-        .select('id')
-        .eq('thread_id', email.thread_id)
+        .select('id,subject,to_addresses,created_at')
+        .eq('direction', 'inbound')
+        .eq('from_address', email.from_address)
+        .neq('id', email.id)
+        .order('created_at', { ascending: false })
+        .limit(50),
+      supabase
+        .from('emails')
+        .select('id,subject,from_address,created_at')
         .eq('direction', 'outbound')
-        .limit(1);
-      if (prior && prior.length) return null;
+        .contains('to_addresses', [email.from_address])
+        .order('created_at', { ascending: false })
+        .limit(50),
+    ]);
+
+    const inbox = account.email.toLowerCase();
+    const priorInbound = (fromThem || []).filter((m) =>
+      (m.to_addresses || []).some((a: string) => a?.toLowerCase() === inbox),
+    );
+    const priorOutbound = (toThem || []).filter(
+      (m) => (m.from_address || '').toLowerCase() === inbox,
+    );
+
+    // Same conversation, continued: they wrote or we wrote under this subject
+    // before, so it is not a new enquiry even without the headers to prove it.
+    const thisSubject = normalizeSubject(email.subject);
+    if (
+      thisSubject &&
+      [...priorInbound, ...priorOutbound].some(
+        (m) => normalizeSubject(m.subject as string | null) === thisSubject,
+      )
+    ) {
+      return null;
     }
 
-    // Quiet period per sender, so a burst of separate emails gets one ack.
-    const since = new Date(Date.now() - PER_SENDER_QUIET_HOURS * 3600_000).toISOString();
-    const { data: recent } = await supabase
-      .from('emails')
-      .select('id')
-      .eq('direction', 'outbound')
-      .contains('to_addresses', [email.from_address])
-      .gte('created_at', since)
-      .limit(1);
-    if (recent && recent.length) return null;
+    // Burst protection: anything already sent to this person recently, an
+    // acknowledgement or a real reply, means they do not need another note.
+    const cutoff = Date.now() - PER_SENDER_QUIET_HOURS * 3600_000;
+    if (priorOutbound.some((m) => Date.parse(m.created_at as string) >= cutoff)) return null;
+    if (
+      priorInbound.some(
+        (m) =>
+          Date.parse(m.created_at as string) >= cutoff &&
+          Date.parse(m.created_at as string) < Date.parse(email.created_at),
+      )
+    ) {
+      return null;
+    }
 
     const { text, html } = ackBody();
     const subject = email.subject?.trim()
