@@ -54,15 +54,15 @@ const TABS: { id: keyof Counts; label: string }[] = [
 function statusMeta(s: string | null): { label: string; cls: string } {
   switch (s) {
     case 'needs_human':
-      return { label: 'Needs you', cls: 'bg-amber-100 text-amber-800' };
+      return { label: 'Needs you', cls: 'bg-amber-50 text-amber-700 border border-amber-100' };
     case 'error':
-      return { label: 'Triage error', cls: 'bg-red-100 text-red-700' };
+      return { label: 'Triage error', cls: 'bg-red-50 text-red-600 border border-red-100' };
     case 'auto_replied':
-      return { label: 'Replied', cls: 'bg-green-100 text-green-700' };
+      return { label: 'Replied', cls: 'bg-emerald-50 text-emerald-700 border border-emerald-100' };
     case 'no_reply_needed':
-      return { label: 'No reply', cls: 'bg-gray-100 text-gray-500' };
+      return { label: 'No reply', cls: 'bg-[var(--hover)] text-[var(--muted)] border border-[var(--border)]' };
     default:
-      return { label: 'Pending', cls: 'bg-blue-50 text-blue-600' };
+      return { label: 'Pending', cls: 'bg-blue-50 text-blue-600 border border-blue-100' };
   }
 }
 
@@ -74,6 +74,19 @@ function siteLabel(account: MasterEmail['account']): string {
 function fmtTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+/** Compact stamp for a message in a conversation: time today, date otherwise. */
+function fmtStamp(iso: string): string {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const today = new Date();
+  const sameDay =
+    d.getDate() === today.getDate() &&
+    d.getMonth() === today.getMonth() &&
+    d.getFullYear() === today.getFullYear();
+  if (sameDay) return time;
+  return `${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, ${time}`;
 }
 
 /** Readable body for a thread message: plain text if present, else de-tagged HTML. */
@@ -332,34 +345,34 @@ export default function MasterView() {
   return (
     <div className="flex flex-col h-screen bg-[var(--background)]">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-white">
+      <div className="flex items-center justify-between px-6 py-3.5 border-b border-[var(--border)] bg-white/90 backdrop-blur sticky top-0 z-20">
         <div>
-          <h1 className="text-lg font-semibold">Master View</h1>
-          <p className="text-xs text-[var(--muted)]">All inbound mail across every course, triaged by AI.</p>
+          <h1 className="text-[15px] font-semibold tracking-tight">Master View</h1>
+          <p className="text-[11px] text-[var(--muted)]">All inbound mail across every course, triaged by AI.</p>
         </div>
         <div className="flex items-center gap-4">
           <button
             onClick={toggleAutoSend}
             title="When ON, the AI automatically sends replies it is confident about (access and pre-sale questions). Everything else still waits for you."
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] font-medium border transition-all cursor-pointer hover:shadow-[var(--card-shadow)] ${
               autoSend
-                ? 'bg-green-50 border-green-300 text-green-700'
-                : 'bg-gray-50 border-[var(--border)] text-[var(--muted)]'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                : 'bg-white border-[var(--border)] text-[var(--muted)]'
             }`}
           >
-            <span className={`inline-block w-2.5 h-2.5 rounded-full ${autoSend ? 'bg-green-500' : 'bg-gray-400'}`} />
+            <span className={`inline-block w-2 h-2 rounded-full ${autoSend ? 'bg-emerald-500' : 'bg-[var(--muted-soft)]'}`} />
             Auto-send AI emails: {autoSend ? 'ON' : 'OFF'}
           </button>
           <button
             onClick={toggleAutoAck}
             title="When ON, a fixed 'your email arrived' note is sent once per new conversation, to non-spam first-time emails only. Replies, bounces and automated senders never get one."
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] font-medium border transition-all cursor-pointer hover:shadow-[var(--card-shadow)] ${
               autoAck
-                ? 'bg-green-50 border-green-300 text-green-700'
-                : 'bg-gray-50 border-[var(--border)] text-[var(--muted)]'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                : 'bg-white border-[var(--border)] textext-[var(--muted)]'
             }`}
           >
-            <span className={`inline-block w-2.5 h-2.5 rounded-full ${autoAck ? 'bg-green-500' : 'bg-gray-400'}`} />
+            <span className={`inline-block w-2 h-2 rounded-full ${autoAck ? 'bg-emerald-500' : 'bg-[var(--muted-soft)]'}`} />
             Auto acknowledge: {autoAck ? 'ON' : 'OFF'}
           </button>
           <Link href="/" className="text-sm text-[var(--primary)] hover:underline">
@@ -369,19 +382,19 @@ export default function MasterView() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 px-6 pt-3 border-b border-[var(--border)] bg-white">
+      <div className="flex gap-1 px-6 pt-2 border-b border-[var(--border)] bg-white sticky top-[57px] z-10">
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-3 py-2 text-sm rounded-t-lg cursor-pointer border-b-2 transition-colors ${
+            className={`px-3 py-1.5 mb-2 text-[13px] rounded-lg cursor-pointer transition-colors ${
               tab === t.id
-                ? 'border-[var(--primary)] text-[var(--primary)] font-medium'
-                : 'border-transparent text-[var(--muted)] hover:text-[var(--foreground)]'
+                ? 'bg-[var(--foreground)] text-white font-medium'
+                : 'text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]'
             }`}
           >
             {t.label}
-            <span className="ml-1.5 text-xs opacity-70">{counts[t.id]}</span>
+            <span className="ml-1.5 text-[11px] opacity-60 tabular-nums">{counts[t.id]}</span>
           </button>
         ))}
       </div>
@@ -401,99 +414,139 @@ export default function MasterView() {
               const open = expandedId === e.id;
               const replied = e.ai_status === 'auto_replied';
               return (
-                <div key={e.id} className="bg-white">
+                <div key={e.id} className={`bg-white ${open ? 'shadow-[var(--card-shadow)]' : ''}`}>
                   <button
                     onClick={() => toggle(e)}
-                    className="w-full text-left px-6 py-3 flex items-center gap-3 hover:bg-[var(--hover)] cursor-pointer"
+                    className={`w-full text-left px-6 py-2.5 flex items-center gap-3 cursor-pointer transition-colors border-l-[3px] ${
+                      open
+                        ? 'bg-[var(--hover)] border-l-[var(--foreground)]'
+                        : 'border-l-transparent hover:bg-[var(--hover)]'
+                    }`}
                   >
                     {e.ai_category === 'spam' && (
-                      <span className="shrink-0 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">
-                        SPAM
+                      <span className="shrink-0 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-red-50 text-red-600 font-bold border border-red-100">
+                        spam
                       </span>
                     )}
-                    <span className="shrink-0 text-[10px] uppercase tracking-wide px-2 py-0.5 rounded bg-gray-100 text-gray-600 font-medium w-28 truncate" title={e.account?.displayName || ''}>
+                    <span className="shrink-0 text-[10px] tracking-wide px-2 py-0.5 rounded-md bg-[var(--hover)] text-[var(--muted)] font-medium w-28 truncate" title={e.account?.displayName || ''}>
                       {siteLabel(e.account)}
                     </span>
-                    <span className="shrink-0 w-40 truncate text-sm font-medium">
+                    <span className="shrink-0 w-40 truncate text-[13px] font-semibold">
                       {e.from_name || e.from_address}
                     </span>
-                    <span className="flex-1 min-w-0 truncate text-sm">
+                    <span className="flex-1 min-w-0 truncate text-[13px]">
                       <span className="text-[var(--foreground)]">{e.subject || '(no subject)'}</span>
-                      <span className="text-[var(--muted)]"> — {e.preview}</span>
+                      <span className="text-[var(--muted-soft)]"> · {e.preview}</span>
                     </span>
                     {(e.attachments?.length ?? 0) > 0 && (
                       <span className="shrink-0 text-xs" title="Has attachments">📎</span>
                     )}
-                    <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded-full font-medium ${meta.cls}`}>
+                    <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium ${meta.cls}`}>
                       {meta.label}
                     </span>
-                    <span className="shrink-0 w-12 text-right text-xs text-[var(--muted)]">
+                    <span className="shrink-0 w-14 text-right text-[11px] text-[var(--muted-soft)] tabular-nums">
                       {fmtTime(e.created_at)}
                     </span>
-                    <span className="shrink-0 text-[var(--muted)] text-xs">{open ? '▾' : '▸'}</span>
+                    <span className="shrink-0 text-[var(--muted-soft)] text-[10px]">{open ? '▾' : '▸'}</span>
                   </button>
 
                   {open && (
-                    <div className="px-6 pb-5 grid grid-cols-1 md:grid-cols-2 gap-4 bg-[var(--background)]">
+                    <div className="px-6 pb-6 pt-1 grid grid-cols-1 lg:grid-cols-2 gap-4 bg-[var(--background)]">
                       {/* Conversation, oldest first */}
-                      <div className="bg-white rounded-lg border border-[var(--border)] p-4">
-                        <div className="text-xs text-[var(--muted)] mb-2">
-                          With <span className="font-medium text-[var(--foreground)]">{e.from_name || ''} &lt;{e.from_address}&gt;</span>
-                          <br />
-                          To {e.account?.email || '—'}
-                          {thread.length > 1 && (
-                            <span> · {thread.length} messages in this conversation</span>
-                          )}
+                      <div className="bg-white rounded-xl border border-[var(--border)] shadow-[var(--card-shadow)] overflow-hidden flex flex-col">
+                        <div className="px-4 py-3 border-b border-[var(--border)] bg-white">
+                          <div className="text-[13px] font-semibold leading-tight">
+                            {e.subject || '(no subject)'}
+                          </div>
+                          <div className="mt-1 flex items-center gap-2 text-[11px] text-[var(--muted)]">
+                            <span className="truncate">
+                              {e.from_name ? `${e.from_name} · ` : ''}{e.from_address}
+                            </span>
+                            <span className="text-[var(--muted-soft)]">→</span>
+                            <span className="truncate">{e.account?.email || '—'}</span>
+                            {thread.length > 1 && (
+                              <span className="ml-auto shrink-0 px-1.5 py-0.5 rounded-full bg-[var(--hover)] text-[var(--muted)]">
+                                {thread.length} messages
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-sm font-medium mb-3">{e.subject || '(no subject)'}</div>
 
                         {threadLoading ? (
-                          <div className="text-sm text-[var(--muted)]">Loading conversation…</div>
+                          <div className="p-4 space-y-2">
+                            {[0, 1].map((i) => (
+                              <div key={i} className="animate-pulse">
+                                <div className="h-2.5 w-24 bg-[var(--hover)] rounded mb-2" />
+                                <div className="h-2 w-full bg-[var(--hover)] rounded mb-1" />
+                                <div className="h-2 w-4/5 bg-[var(--hover)] rounded" />
+                              </div>
+                            ))}
+                          </div>
                         ) : thread.length === 0 ? (
-                          <div className="text-sm whitespace-pre-wrap text-[var(--foreground)] max-h-72 overflow-y-auto">
+                          <div className="p-4 text-[13px] whitespace-pre-wrap max-h-72 overflow-y-auto thin-scroll">
                             {e.text_body || e.preview || '(no body)'}
                           </div>
                         ) : (
-                          <div className="space-y-3 max-h-96 overflow-y-auto">
+                          <div className="p-4 space-y-2.5 max-h-[26rem] overflow-y-auto thin-scroll">
                             {thread.map((m) => {
                               const isOwner = m.direction === 'outbound';
                               const isCurrent = m.id === e.id;
+                              const who = isOwner
+                                ? personName(e.account?.displayName)
+                                : m.from_name || m.from_address;
                               return (
                                 <div
                                   key={m.id}
-                                  className={`rounded-md border p-3 ${
+                                  // Pink left edge = sent by you. The single
+                                  // strongest cue for reading who said what.
+                                  className={`relative rounded-lg border-l-[3px] border-y border-r px-3 py-2.5 transition-shadow ${
                                     isOwner
-                                      ? 'bg-[var(--background)] border-[var(--border)]'
-                                      : 'bg-white border-[var(--border)]'
-                                  } ${isCurrent ? 'ring-1 ring-[var(--primary)]' : ''}`}
+                                      ? 'border-l-[var(--mine)] bg-[var(--mine-bg)] border-y-[var(--mine-border)] border-r-[var(--mine-border)]'
+                                      : 'border-l-[var(--border-strong)] bg-white border-y-[var(--border)] border-r-[var(--border)]'
+                                  } ${isCurrent ? 'shadow-[var(--card-shadow-lg)]' : ''}`}
                                 >
-                                  <div className="flex items-center justify-between gap-2 mb-1">
-                                    <span className="text-xs font-medium truncate">
-                                      {isOwner
-                                        ? personName(e.account?.displayName)
-                                        : m.from_name || m.from_address}
+                                  <div className="flex items-center gap-2 mb-1.5">
+                                    <span
+                                      className={`shrink-0 w-5 h-5 rounded-full grid place-items-center text-[10px] font-semibold ${
+                                        isOwner
+                                          ? 'bg-[var(--mine)] text-white'
+                                          : 'bg-[var(--hover)] text-[var(--muted)]'
+                                      }`}
+                                    >
+                                      {(who || '?').trim().charAt(0).toUpperCase()}
+                                    </span>
+                                    <span
+                                      className={`text-[12px] font-semibold truncate ${
+                                        isOwner ? 'text-[var(--mine)]' : 'text-[var(--foreground)]'
+                                      }`}
+                                    >
+                                      {who}
                                       {isOwner && (
-                                        <span className="ml-1 font-normal text-[var(--muted)]">(you)</span>
+                                        <span className="ml-1 font-normal opacity-70">(you)</span>
                                       )}
                                     </span>
-                                    <span className="shrink-0 text-[11px] text-[var(--muted)]">
-                                      {new Date(m.created_at).toLocaleString()}
-                                      {isCurrent && thread.length > 1 && ' · this one'}
+                                    {isCurrent && thread.length > 1 && (
+                                      <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-medium">
+                                        triaged
+                                      </span>
+                                    )}
+                                    <span className="ml-auto shrink-0 text-[11px] text-[var(--muted-soft)] tabular-nums">
+                                      {fmtStamp(m.created_at)}
                                     </span>
                                   </div>
                                   {(() => {
                                     const { main, quoted } = splitQuote(bodyText(m));
                                     return (
                                       <>
-                                        <div className="text-sm whitespace-pre-wrap text-[var(--foreground)]">
+                                        <div className="text-[13px] leading-relaxed whitespace-pre-wrap text-[var(--foreground)]">
                                           {main || '(no new text)'}
                                         </div>
                                         {quoted && (
-                                          <details className="mt-2">
-                                            <summary className="text-xs text-[var(--muted)] cursor-pointer hover:text-[var(--foreground)]">
-                                              show quoted text
+                                          <details className="mt-1.5">
+                                            <summary className="text-[11px] text-[var(--muted-soft)] cursor-pointer hover:text-[var(--muted)] select-none">
+                                              quoted text
                                             </summary>
-                                            <div className="mt-1 pl-3 border-l-2 border-[var(--border)] text-xs whitespace-pre-wrap text-[var(--muted)]">
+                                            <div className="mt-1 pl-3 border-l-2 border-[var(--border)] text-[11px] leading-relaxed whitespace-pre-wrap text-[var(--muted)]">
                                               {quoted}
                                             </div>
                                           </details>
@@ -502,14 +555,14 @@ export default function MasterView() {
                                     );
                                   })()}
                                   {(m.attachments?.length ?? 0) > 0 && (
-                                    <div className="mt-2 flex flex-wrap gap-2 border-t border-[var(--border)] pt-2">
+                                    <div className="mt-2 flex flex-wrap gap-1.5 border-t border-[var(--border)] pt-2">
                                       {m.attachments!.map((a) => (
                                         <a
                                           key={a.id}
                                           href={`/api/attachments/${a.id}`}
                                           target="_blank"
                                           rel="noreferrer"
-                                          className="text-xs px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--hover)] text-[var(--primary)]"
+                                          className="text-[11px] px-2 py-1 rounded-md border border-[var(--border)] hover:bg-[var(--hover)] text-[var(--primary)] transition-colors"
                                         >
                                           📎 {a.filename || 'attachment'}
                                         </a>
@@ -524,18 +577,22 @@ export default function MasterView() {
                       </div>
 
                       {/* AI reply */}
-                      <div className="bg-white rounded-lg border border-[var(--border)] p-4 flex flex-col">
-                        <div className="text-xs text-[var(--muted)] mb-2">
-                          AI: <span className="font-medium">{(e.ai_category || 'untriaged').replace(/_/g, ' ')}</span>
+                      <div className="bg-white rounded-xl border border-[var(--border)] shadow-[var(--card-shadow)] p-4 flex flex-col">
+                        <div className="text-[11px] text-[var(--muted)] mb-2 flex flex-wrap items-center gap-1.5">
+                          <span className="px-1.5 py-0.5 rounded-md bg-[var(--hover)] font-medium text-[var(--foreground)]">
+                            {(e.ai_category || 'untriaged').replace(/_/g, ' ')}
+                          </span>
                           {typeof e.ai_confidence === 'number' && (
-                            <span> · {Math.round(e.ai_confidence * 100)}% confident</span>
+                            <span className="tabular-nums">{Math.round(e.ai_confidence * 100)}% confident</span>
                           )}
                           {e.ai_reason && <div className="mt-1 italic">{e.ai_reason}</div>}
                         </div>
 
                         {replied ? (
-                          <div className="text-sm whitespace-pre-wrap text-[var(--foreground)] border-t border-[var(--border)] pt-2">
-                            <div className="text-xs text-green-700 font-medium mb-1">✓ Reply sent</div>
+                          <div className="text-[13px] leading-relaxed whitespace-pre-wrap text-[var(--foreground)] rounded-lg border-l-[3px] border-l-[var(--mine)] bg-[var(--mine-bg)] border-y border-r border-[var(--mine-border)] px-3 py-2.5">
+                            <div className="text-[11px] text-[var(--mine)] font-semibold mb-1.5">
+                              ✓ sent by you
+                            </div>
                             {e.ai_draft || '(no draft on file)'}
                           </div>
                         ) : (
@@ -544,24 +601,24 @@ export default function MasterView() {
                               value={draft}
                               onChange={(ev) => setDraft(ev.target.value)}
                               placeholder="No draft — write a reply…"
-                              className="flex-1 min-h-[180px] text-sm border border-[var(--border)] rounded-lg p-3 outline-none focus:border-[var(--primary)] resize-none whitespace-pre-wrap"
+                              className="flex-1 min-h-[180px] text-[13px] leading-relaxed border border-[var(--border)] rounded-lg p-3 outline-none focus:border-[var(--mine)] focus:ring-2 focus:ring-[var(--mine-border)] resize-none whitespace-pre-wrap transition-shadow"
                             />
                             <div className="flex items-center gap-2 mt-3">
                               <button
                                 onClick={() => send(e)}
                                 disabled={busyId === e.id || !draft.trim() || !e.account}
-                                className="bg-[var(--primary)] text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-[var(--primary-hover)] disabled:opacity-50 cursor-pointer"
+                                className="bg-[var(--mine)] text-white px-5 py-2 rounded-lg text-[13px] font-medium hover:opacity-90 disabled:opacity-40 cursor-pointer transition-opacity shadow-[var(--card-shadow)]"
                               >
                                 {busyId === e.id ? 'Sending…' : `Send as ${e.account ? e.account.displayName.split(' - ')[0] : '—'}`}
                               </button>
                               <button
                                 onClick={() => dismiss(e)}
                                 disabled={busyId === e.id}
-                                className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] px-3 py-2 cursor-pointer"
+                                className="text-[13px] text-[var(--muted)] hover:text-[var(--foreground)] px-3 py-2 cursor-pointer rounded-lg hover:bg-[var(--hover)] transition-colors"
                               >
                                 Dismiss (no reply)
                               </button>
-                              <span className="ml-auto text-xs text-[var(--muted)]">
+                              <span className="ml-auto text-[11px] text-[var(--muted-soft)] truncate">
                                 to {e.from_address}
                               </span>
                             </div>

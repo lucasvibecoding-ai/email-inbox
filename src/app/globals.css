@@ -1,14 +1,25 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f9fafb;
-  --foreground: #111827;
+  --background: #f6f7f9;
+  --foreground: #0f172a;
   --sidebar-bg: #ffffff;
-  --border: #e5e7eb;
+  --border: #e6e8ec;
+  --border-strong: #d3d7de;
   --primary: #2563eb;
   --primary-hover: #1d4ed8;
-  --hover: #f3f4f6;
+  --hover: #f1f3f7;
   --muted: #6b7280;
+  --muted-soft: #9aa2ae;
+
+  /* Outbound mail: anything sent by the account owner is marked in pink so a
+     conversation can be read at a glance. */
+  --mine: #db2777;
+  --mine-border: #f7a8cd;
+  --mine-bg: #fdf3f8;
+
+  --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --card-shadow-lg: 0 4px 12px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 @theme inline {
@@ -21,5 +32,41 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Geist is loaded in layout.tsx; it was being overridden by Arial. */
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Quieter scrollbars inside conversation panes. */
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: #d8dce3;
+  border-radius: 999px;
+}
+.thin-scroll::-webkit-scrollbar-thumb:hover {
+  background: #c2c8d2;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Disclosure arrow for the collapsed quoted text. */
+details > summary {
+  list-style: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 0.35rem;
+  transition: transform 0.15s ease;
+}
+details[open] > summary::before {
+  transform: rotate(90deg);
 }
