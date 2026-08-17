@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 
 interface MasterEmail {
@@ -19,6 +19,19 @@ interface MasterEmail {
   ai_draft: string | null;
   ai_reason: string | null;
   account: { id: string; displayName: string; email: string; domain: string } | null;
+  attachments?: { id: string; filename: string | null; content_type: string | null; size: number | null }[];
+}
+
+// A message in the expanded row's conversation, from GET /api/emails/[id].
+interface ThreadEmail {
+  id: string;
+  direction: 'inbound' | 'outbound';
+  from_name: string | null;
+  from_address: string;
+  subject: string | null;
+  text_body: string | null;
+  html_body: string | null;
+  created_at: string;
   attachments?: { id: string; filename: string | null; content_type: string | null; size: number | null }[];
 }
 
@@ -63,6 +76,60 @@ function fmtTime(iso: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+/** Readable body for a thread message: plain text if present, else de-tagged HTML. */
+function bodyText(m: ThreadEmail): string {
+  if (m.text_body && m.text_body.trim()) return m.text_body;
+  if (m.html_body) {
+    return m.html_body
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|tr|li|h[1-6])>/gi, '\n')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+  return '(no body)';
+}
+
+// Where a reply stops being new text and starts quoting what came before.
+// Covers the English, French and Outlook header styles seen in this mailbox,
+// plus a bare run of underscores and ">" quoting.
+const QUOTE_MARKERS: RegExp[] = [
+  /^-{2,}\s*On .+/m,
+  /^On .+ wrote:\s*$/m,
+  /^_{5,}\s*$/m,
+  /^De\s*:\s.+/m,
+  /^From:\s.+/m,
+  /^Le .+ a écrit\s*:/m,
+  /^>{1,}\s?/m,
+];
+
+/**
+ * Split a body into the new text and the quoted history below it. Every
+ * message in a thread tends to quote the whole conversation, which is pure
+ * duplication once the thread is displayed message by message. Nothing is
+ * discarded: the quoted part goes behind a disclosure.
+ */
+function splitQuote(body: string): { main: string; quoted: string } {
+  let cut = -1;
+  for (const re of QUOTE_MARKERS) {
+    const m = body.match(re);
+    if (m?.index !== undefined && (cut === -1 || m.index < cut)) cut = m.index;
+  }
+  // Ignore a marker so early that the message would be left empty.
+  if (cut <= 0) return { main: body, quoted: '' };
+  return { main: body.slice(0, cut).trim(), quoted: body.slice(cut).trim() };
+}
+
+/** The person behind an account, without the course suffix. */
+function personName(displayName: string | undefined): string {
+  if (!displayName) return 'You';
+  return displayName.split(/\s+[-–—]\s+/)[0].trim() || 'You';
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -76,6 +143,9 @@ export default function MasterView() {
   const [emails, setEmails] = useState<MasterEmail[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [thread, setThread] = useState<ThreadEmail[]>([]);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const expandedIdRef = useRef<string | null>(null);
   const [draft, setDraft] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [autoSend, setAutoSend] = useState(false);
@@ -129,18 +199,30 @@ export default function MasterView() {
     };
   }, [fetchData]);
 
-  const toggle = (e: MasterEmail) => {
+  const toggle = async (e: MasterEmail) => {
     if (expandedId === e.id) {
+      expandedIdRef.current = null;
       setExpandedId(null);
-    } else {
-      setExpandedId(e.id);
-      setDraft(e.ai_draft || '');
-      // Opening it here counts as "seen" — mark it read in the main inbox too.
-      fetch(`/api/emails/${e.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_read: true }),
-      }).catch(() => {});
+      setThread([]);
+      return;
+    }
+    expandedIdRef.current = e.id;
+    setExpandedId(e.id);
+    setDraft(e.ai_draft || '');
+    setThread([]);
+    setThreadLoading(true);
+    try {
+      // GET returns the whole thread oldest first AND marks the email read,
+      // which is what the PATCH this replaces used to do on its own.
+      const res = await fetch(`/api/emails/${e.id}`);
+      const data = await res.json();
+      if (expandedIdRef.current !== e.id) return; // a newer row was opened
+      const rows: ThreadEmail[] = Array.isArray(data.thread) ? data.thread : [];
+      setThread(rows.length ? rows : data.email ? [data.email] : []);
+    } catch {
+      if (expandedIdRef.current === e.id) setThread([]);
+    } finally {
+      if (expandedIdRef.current === e.id) setThreadLoading(false);
     }
   };
 
@@ -315,30 +397,90 @@ export default function MasterView() {
 
                   {open && (
                     <div className="px-6 pb-5 grid grid-cols-1 md:grid-cols-2 gap-4 bg-[var(--background)]">
-                      {/* Original */}
+                      {/* Conversation, oldest first */}
                       <div className="bg-white rounded-lg border border-[var(--border)] p-4">
                         <div className="text-xs text-[var(--muted)] mb-2">
-                          From <span className="font-medium text-[var(--foreground)]">{e.from_name || ''} &lt;{e.from_address}&gt;</span>
+                          With <span className="font-medium text-[var(--foreground)]">{e.from_name || ''} &lt;{e.from_address}&gt;</span>
                           <br />
                           To {e.account?.email || '—'}
+                          {thread.length > 1 && (
+                            <span> · {thread.length} messages in this conversation</span>
+                          )}
                         </div>
-                        <div className="text-sm font-medium mb-2">{e.subject || '(no subject)'}</div>
-                        <div className="text-sm whitespace-pre-wrap text-[var(--foreground)] max-h-72 overflow-y-auto">
-                          {e.text_body || e.preview || '(no body)'}
-                        </div>
-                        {(e.attachments?.length ?? 0) > 0 && (
-                          <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border)] pt-3">
-                            {e.attachments!.map((a) => (
-                              <a
-                                key={a.id}
-                                href={`/api/attachments/${a.id}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-xs px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--hover)] text-[var(--primary)]"
-                              >
-                                📎 {a.filename || 'attachment'}
-                              </a>
-                            ))}
+                        <div className="text-sm font-medium mb-3">{e.subject || '(no subject)'}</div>
+
+                        {threadLoading ? (
+                          <div className="text-sm text-[var(--muted)]">Loading conversation…</div>
+                        ) : thread.length === 0 ? (
+                          <div className="text-sm whitespace-pre-wrap text-[var(--foreground)] max-h-72 overflow-y-auto">
+                            {e.text_body || e.preview || '(no body)'}
+                          </div>
+                        ) : (
+                          <div className="space-y-3 max-h-96 overflow-y-auto">
+                            {thread.map((m) => {
+                              const isOwner = m.direction === 'outbound';
+                              const isCurrent = m.id === e.id;
+                              return (
+                                <div
+                                  key={m.id}
+                                  className={`rounded-md border p-3 ${
+                                    isOwner
+                                      ? 'bg-[var(--background)] border-[var(--border)]'
+                                      : 'bg-white border-[var(--border)]'
+                                  } ${isCurrent ? 'ring-1 ring-[var(--primary)]' : ''}`}
+                                >
+                                  <div className="flex items-center justify-between gap-2 mb-1">
+                                    <span className="text-xs font-medium truncate">
+                                      {isOwner
+                                        ? personName(e.account?.displayName)
+                                        : m.from_name || m.from_address}
+                                      {isOwner && (
+                                        <span className="ml-1 font-normal text-[var(--muted)]">(you)</span>
+                                      )}
+                                    </span>
+                                    <span className="shrink-0 text-[11px] text-[var(--muted)]">
+                                      {new Date(m.created_at).toLocaleString()}
+                                      {isCurrent && thread.length > 1 && ' · this one'}
+                                    </span>
+                                  </div>
+                                  {(() => {
+                                    const { main, quoted } = splitQuote(bodyText(m));
+                                    return (
+                                      <>
+                                        <div className="text-sm whitespace-pre-wrap text-[var(--foreground)]">
+                                          {main || '(no new text)'}
+                                        </div>
+                                        {quoted && (
+                                          <details className="mt-2">
+                                            <summary className="text-xs text-[var(--muted)] cursor-pointer hover:text-[var(--foreground)]">
+                                              show quoted text
+                                            </summary>
+                                            <div className="mt-1 pl-3 border-l-2 border-[var(--border)] text-xs whitespace-pre-wrap text-[var(--muted)]">
+                                              {quoted}
+                                            </div>
+                                          </details>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
+                                  {(m.attachments?.length ?? 0) > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-2 border-t border-[var(--border)] pt-2">
+                                      {m.attachments!.map((a) => (
+                                        <a
+                                          key={a.id}
+                                          href={`/api/attachments/${a.id}`}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="text-xs px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--hover)] text-[var(--primary)]"
+                                        >
+                                          📎 {a.filename || 'attachment'}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
