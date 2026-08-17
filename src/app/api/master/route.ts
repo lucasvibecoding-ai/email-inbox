@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { getAccountByEmail } from '@/lib/accounts';
-import { getAutoSend } from '@/lib/settings';
+import { getAutoSend, getAutoAck } from '@/lib/settings';
 import { getAttachmentsByEmail } from '@/lib/attachments';
 
 // Must stay a single string literal: supabase-js infers the row type from the
@@ -115,9 +115,11 @@ export async function GET(req: NextRequest) {
   });
 
   const autoSend = await getAutoSend(supabase);
+  const autoAck = await getAutoAck(supabase);
   return NextResponse.json({
     counts: { needs_you: nu.count || 0, replied: rp.count || 0, no_reply: nr.count || 0, spam: sp.count || 0, all: al.count || 0 },
     autoSend,
+    autoAck,
     emails,
   });
 }

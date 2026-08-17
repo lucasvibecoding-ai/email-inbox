@@ -3,9 +3,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Account } from './accounts';
 import type { Email } from './types';
 import { getVoiceGuide, getPlatformFacts, getBrief } from './knowledge';
-import { getAutoSend } from './settings';
+import { getAutoSend, getAutoAck } from './settings';
 import { sendReply } from './send';
 import { notifyNeedsYou } from './notify';
+import { maybeSendAck } from './autoack';
 import { getAttachmentsByEmail } from './attachments';
 
 export type TriageCategory =
@@ -494,7 +495,11 @@ export async function runTriageForEmail(
   supabase: SupabaseClient,
   email: Email,
   account: Account,
+  // Opt in, never default. Only the live inbound webhook may acknowledge; the
+  // sweep must not, or one run would mail the whole untriaged backlog.
+  opts: { allowAck?: boolean } = {},
 ): Promise<void> {
+  const allowAck = opts.allowAck === true;
   try {
     // First, look through the DB: if the owner already replied to this email in
     // its thread, there is nothing to draft. Mark it replied and stop.
@@ -608,6 +613,14 @@ export async function runTriageForEmail(
       .eq('id', email.id);
     if (status === 'needs_human') {
       await fireNeedsYouAlert(supabase, email, account, result.category, result.reason);
+    }
+
+    // Static acknowledgement for genuinely new, non-spam mail. Deliberately
+    // also fires for needs_human (refunds, complaints): someone waiting on a
+    // refund wants to know their email landed. Not reached on the auto_replied
+    // path above, which returns after sending a real answer.
+    if (allowAck && (await getAutoAck(supabase))) {
+      await maybeSendAck(supabase, email, account, result.category, { allowAck: true });
     }
   } catch (err) {
     console.error('Triage failed for email', email.id, err);

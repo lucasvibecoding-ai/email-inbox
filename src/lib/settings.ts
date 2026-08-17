@@ -22,3 +22,26 @@ export async function setAutoSend(supabase: SupabaseClient, on: boolean): Promis
   );
   if (error) throw new Error(error.message);
 }
+
+// The static "we got your email" acknowledgement. Unlike auto-send this
+// defaults ON, because the reply is a fixed sentence that cannot say anything
+// wrong; only an explicit 'off' disables it.
+const AUTO_ACK_KEY = 'auto_ack';
+
+export async function getAutoAck(supabase: SupabaseClient): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('app_settings')
+    .select('value')
+    .eq('key', AUTO_ACK_KEY)
+    .maybeSingle();
+  if (error) return true; // table/row may not exist yet — default ON
+  return data?.value !== 'off';
+}
+
+export async function setAutoAck(supabase: SupabaseClient, on: boolean): Promise<void> {
+  const { error } = await supabase.from('app_settings').upsert(
+    { key: AUTO_ACK_KEY, value: on ? 'on' : 'off', updated_at: new Date().toISOString() },
+    { onConflict: 'key' },
+  );
+  if (error) throw new Error(error.message);
+}

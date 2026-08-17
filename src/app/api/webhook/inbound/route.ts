@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
     // Triage the new email with AI after the 200 response is sent (draft-only).
     // Only when we can map the recipient to a known course account.
     if (matchedAccount && inserted) {
-      after(() => runTriageForEmail(supabase, inserted as Email, matchedAccount));
+      after(() => runTriageForEmail(supabase, inserted as Email, matchedAccount, { allowAck: true }));
       if (emailId) {
         after(() =>
           captureAttachments(supabase, matchedAccount.resendApiKey, emailId, inserted.id),

@@ -149,6 +149,7 @@ export default function MasterView() {
   const [draft, setDraft] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [autoSend, setAutoSend] = useState(false);
+  const [autoAck, setAutoAck] = useState(true);
 
   const fetchData = useCallback(async () => {
     const res = await fetch(`/api/master?tab=${tab}`);
@@ -156,6 +157,7 @@ export default function MasterView() {
     const data = await res.json();
     setCounts(data.counts);
     setAutoSend(!!data.autoSend);
+    if (typeof data.autoAck === 'boolean') setAutoAck(data.autoAck);
     setEmails(data.emails || []);
     setLoading(false);
   }, [tab]);
@@ -303,6 +305,28 @@ export default function MasterView() {
     }
   };
 
+  const toggleAutoAck = async () => {
+    const next = !autoAck;
+    if (
+      !next &&
+      !window.confirm(
+        'Turn OFF the auto acknowledgement? New senders will stop receiving the "your email arrived" note until you turn it back on.',
+      )
+    ) {
+      return;
+    }
+    setAutoAck(next);
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ autoAck: next }),
+    });
+    if (!res.ok) {
+      setAutoAck(!next);
+      alert('Could not change the setting.');
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-[var(--background)]">
       {/* Header */}
@@ -323,6 +347,18 @@ export default function MasterView() {
           >
             <span className={`inline-block w-2.5 h-2.5 rounded-full ${autoSend ? 'bg-green-500' : 'bg-gray-400'}`} />
             Auto-send AI emails: {autoSend ? 'ON' : 'OFF'}
+          </button>
+          <button
+            onClick={toggleAutoAck}
+            title="When ON, a fixed 'your email arrived' note is sent once per new conversation, to non-spam first-time emails only. Replies, bounces and automated senders never get one."
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer ${
+              autoAck
+                ? 'bg-green-50 border-green-300 text-green-700'
+                : 'bg-gray-50 border-[var(--border)] text-[var(--muted)]'
+            }`}
+          >
+            <span className={`inline-block w-2.5 h-2.5 rounded-full ${autoAck ? 'bg-green-500' : 'bg-gray-400'}`} />
+            Auto acknowledge: {autoAck ? 'ON' : 'OFF'}
           </button>
           <Link href="/" className="text-sm text-[var(--primary)] hover:underline">
             Inbox →
