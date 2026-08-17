@@ -23,6 +23,57 @@ export interface NeedsYouAlert {
   attachments?: { filename: string | null }[];
 }
 
+/** True when triage classified this as a refund request. */
+function isRefund(category: string | null | undefined): boolean {
+  return String(category || '').trim().toLowerCase() === 'refund';
+}
+
+/** The Telegram message body. Pure, so the formatting can be checked without
+ *  sending anything. */
+export function buildAlertText(a: NeedsYouAlert): string {
+  const from = (a.fromName ? `${a.fromName} <${a.fromAddress}>` : a.fromAddress).slice(0, 200);
+  const subject = (a.subject || '(no subject)').slice(0, 250);
+  const msg = firstMessage(a.body || '');
+  const trimmed = msg.length > 1500 ? msg.slice(0, 1500) + '…' : msg;
+  const refund = isRefund(a.category);
+
+  // Only the <b> header labels carry HTML tags, and they always sit at the top
+  // of the message; everything below is escaped plain text. That keeps the
+  // length-trim at the bottom from ever cutting a tag in half.
+  const lines = [
+    // A refund shouts, so it is recognisable in a glance at the lock screen.
+    refund
+      ? `❌ <b>REFUND · ${escapeHtml(a.account.displayName)}</b>`
+      : `🔔 <b>Needs you · ${escapeHtml(a.account.displayName)}</b>`,
+    `<b>From:</b> ${escapeHtml(from)}`,
+    // The real subject is deliberately replaced on a refund.
+    refund ? `<b>Subject:</b> ❌ REFUND` : `<b>Subject:</b> ${escapeHtml(subject)}`,
+    '',
+    escapeHtml(trimmed || '(no message body)'),
+  ];
+
+  const names = (a.attachments || [])
+    .map((x) => x.filename)
+    .filter(Boolean)
+    .map(String);
+  if (names.length) {
+    lines.push(
+      '',
+      `📎 ${names.length} attachment${names.length > 1 ? 's' : ''}: ${escapeHtml(names.join(', ').slice(0, 300))}`,
+    );
+  }
+
+  const meta = [a.category, a.reason].filter(Boolean).map(String).join(' · ').slice(0, 250);
+  if (meta) lines.push('', `🤖 ${escapeHtml(meta)}`);
+
+  let text = lines.join('\n');
+  if (text.length > 4000) {
+    // Trim to Telegram's 4096 limit without leaving a half-written entity.
+    text = text.slice(0, 4000).replace(/&[^;]{0,6}$/, '') + '…';
+  }
+  return text;
+}
+
 /** Push a Telegram alert for an email that just landed in "Needs you". Best
  *  effort: returns quietly if Telegram is not configured, and never throws so a
  *  notification failure can never break triage. */
@@ -31,41 +82,7 @@ export async function notifyNeedsYou(a: NeedsYouAlert): Promise<void> {
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) return;
   try {
-    const from = (a.fromName ? `${a.fromName} <${a.fromAddress}>` : a.fromAddress).slice(0, 200);
-    const subject = (a.subject || '(no subject)').slice(0, 250);
-    const msg = firstMessage(a.body || '');
-    const trimmed = msg.length > 1500 ? msg.slice(0, 1500) + '…' : msg;
-
-    // Only the <b> header labels carry HTML tags, and they always sit at the top
-    // of the message; everything below is escaped plain text. That keeps the
-    // length-trim at the bottom from ever cutting a tag in half.
-    const lines = [
-      `🔔 <b>Needs you · ${escapeHtml(a.account.displayName)}</b>`,
-      `<b>From:</b> ${escapeHtml(from)}`,
-      `<b>Subject:</b> ${escapeHtml(subject)}`,
-      '',
-      escapeHtml(trimmed || '(no message body)'),
-    ];
-
-    const names = (a.attachments || [])
-      .map((x) => x.filename)
-      .filter(Boolean)
-      .map(String);
-    if (names.length) {
-      lines.push(
-        '',
-        `📎 ${names.length} attachment${names.length > 1 ? 's' : ''}: ${escapeHtml(names.join(', ').slice(0, 300))}`,
-      );
-    }
-
-    const meta = [a.category, a.reason].filter(Boolean).map(String).join(' · ').slice(0, 250);
-    if (meta) lines.push('', `🤖 ${escapeHtml(meta)}`);
-
-    let text = lines.join('\n');
-    if (text.length > 4000) {
-      // Trim to Telegram's 4096 limit without leaving a half-written entity.
-      text = text.slice(0, 4000).replace(/&[^;]{0,6}$/, '') + '…';
-    }
+    const text = buildAlertText(a);
 
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
