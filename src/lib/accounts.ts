@@ -123,6 +123,14 @@ export function getAccounts(): Account[] {
       domain: 'treeoflifeclass.com',
       resendApiKey: process.env.RESEND_API_KEY_TREEOFLIFECLASS!,
     },
+    {
+      id: 'simplesketchesclass',
+      email: 'hello@simplesketchesclass.com',
+      senderName: 'Aiko Mori',
+      displayName: 'Simple Sketch - Aiko Mori',
+      domain: 'simplesketchesclass.com',
+      resendApiKey: process.env.RESEND_API_KEY_SIMPLESKETCHESCLASS!,
+    },
   ];
 }
 
