@@ -495,11 +495,14 @@ export async function runTriageForEmail(
   supabase: SupabaseClient,
   email: Email,
   account: Account,
-  // Opt in, never default. Only the live inbound webhook may acknowledge; the
-  // sweep must not, or one run would mail the whole untriaged backlog.
-  opts: { allowAck?: boolean } = {},
+  // Opt in, never default. Only the live inbound webhook may acknowledge or
+  // push to the phone; the sweep must not, or one backfill run would mail the
+  // whole untriaged backlog and fire a phone push per old email (it did:
+  // 94 Telegram pings on 2026-09-01).
+  opts: { allowAck?: boolean; allowAlert?: boolean } = {},
 ): Promise<void> {
   const allowAck = opts.allowAck === true;
+  const allowAlert = opts.allowAlert === true;
   try {
     // First, look through the DB: if the owner already replied to this email in
     // its thread, there is nothing to draft. Mark it replied and stop.
@@ -602,7 +605,7 @@ export async function runTriageForEmail(
             ai_reason: `${result.reason || ''} [auto-send failed: ${(sendErr instanceof Error ? sendErr.message : 'error').slice(0, 150)}]`,
           })
           .eq('id', email.id);
-        await fireNeedsYouAlert(supabase, email, account, result.category, 'Auto-send failed, needs manual send');
+        if (allowAlert) await fireNeedsYouAlert(supabase, email, account, result.category, 'Auto-send failed, needs manual send');
         return;
       }
     }
@@ -612,7 +615,7 @@ export async function runTriageForEmail(
       .update({ ...baseFields, ai_status: status })
       .eq('id', email.id);
     if (status === 'needs_human') {
-      await fireNeedsYouAlert(supabase, email, account, result.category, result.reason);
+      if (allowAlert) await fireNeedsYouAlert(supabase, email, account, result.category, result.reason);
     }
 
     // Static acknowledgement for genuinely new, non-spam mail. Deliberately
@@ -632,6 +635,6 @@ export async function runTriageForEmail(
         ai_processed_at: new Date().toISOString(),
       })
       .eq('id', email.id);
-    await fireNeedsYouAlert(supabase, email, account, null, 'Triage error, needs manual handling');
+    if (allowAlert) await fireNeedsYouAlert(supabase, email, account, null, 'Triage error, needs manual handling');
   }
 }
