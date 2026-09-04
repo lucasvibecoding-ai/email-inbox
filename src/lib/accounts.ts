@@ -131,6 +131,14 @@ export function getAccounts(): Account[] {
       domain: 'simplesketchesclass.com',
       resendApiKey: process.env.RESEND_API_KEY_SIMPLESKETCHESCLASS!,
     },
+    {
+      id: 'bibleinkclass',
+      email: 'hello@bibleinkclass.com',
+      senderName: 'Grace Bennett',
+      displayName: 'Bible Ink - Grace Bennett',
+      domain: 'bibleinkclass.com',
+      resendApiKey: process.env.RESEND_API_KEY_BIBLEINKCLASS!,
+    },
   ];
 }
 
