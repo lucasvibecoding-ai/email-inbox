@@ -107,15 +107,22 @@ export async function GET(
       .filter((m) => !m.is_trash || m.id === data.id)
       .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))
       .slice(-CONVERSATION_LIMIT);
-    // Always include the email being viewed, even if a filter dropped it.
-    if (!threadRows.some((m) => m.id === data.id)) threadRows.push(data);
+    // The email being viewed must be present AND must be the full row. The
+    // conversation query returns a light copy of it like any other message, so
+    // in light mode that copy has no html_body; an HTML-only email would then
+    // render "(no body)" precisely when it is the one you opened. `data` was
+    // already fetched with every column, so swap it in rather than re-query.
+    const focusIdx = threadRows.findIndex((m) => m.id === data.id);
+    if (focusIdx >= 0) threadRows[focusIdx] = data;
+    else threadRows.push(data);
 
     // Light mode skipped html_body wholesale; give it back only to the few
     // recent messages that have no plain text at all, or they would render
     // blank.
     if (light) {
+      // data.id is excluded because the swap above already gave it html_body.
       const needHtml = threadRows
-        .filter((m) => !m.text_body && m.id !== data.id)
+        .filter((m) => !m.text_body && !m.html_body && m.id !== data.id)
         .slice(-LIGHT_HTML_TOPUP)
         .map((m) => m.id);
       if (needHtml.length) {

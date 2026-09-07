@@ -109,6 +109,35 @@ function stripQuote(text: string | null): string {
 }
 
 /**
+ * Readable text for an email, falling back to its HTML.
+ *
+ * About 7% of inbound mail arrives with no text_body at all, only HTML (Apple
+ * Mail does this routinely). Reading text_body alone hands the model
+ * "(empty body)" for those, so a real message gets triaged as an empty one and
+ * the Telegram alert shows nothing either.
+ */
+export function plainBody(email: { text_body: string | null; html_body?: string | null }): string {
+  const t = (email.text_body || '').trim();
+  if (t) return t;
+  const h = email.html_body || '';
+  if (!h) return '';
+  return h
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|tr|li|h[1-6]|blockquote)>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
  * Who the draft is written as. Taken from the account rather than hardcoded:
  * most sites are Aiko Mori, but not all of them are.
  */
@@ -479,7 +508,7 @@ async function fireNeedsYouAlert(
       fromName: email.from_name,
       fromAddress: email.from_address,
       subject: email.subject,
-      body: email.text_body,
+      body: plainBody(email),
       category,
       reason,
       attachments: attByEmail[email.id] || [],
@@ -528,7 +557,7 @@ export async function runTriageForEmail(
       .filter((m) => m.id !== email.id && new Date(m.created_at).getTime() <= currentTime)
       .map((m) => ({
         role: m.direction === 'outbound' ? ('owner' as const) : ('customer' as const),
-        text: stripQuote(m.text_body).slice(0, 600),
+        text: stripQuote(plainBody(m)).slice(0, 600),
       }))
       .filter((m) => m.text.length > 0)
       .slice(-6);
@@ -537,7 +566,7 @@ export async function runTriageForEmail(
     // history, then fill with recent replies so there is always some style.
     const relevant = await getRelevantExamples(
       supabase,
-      `${email.subject || ''} ${email.text_body || ''}`,
+      `${email.subject || ''} ${plainBody(email)}`,
     );
     const styleExamples: StyleExample[] = [...relevant];
     if (styleExamples.length < 3) {
@@ -557,7 +586,7 @@ export async function runTriageForEmail(
       fromName: email.from_name,
       fromAddress: email.from_address,
       subject: email.subject,
-      textBody: email.text_body,
+      textBody: plainBody(email),
       styleExamples,
       threadContext,
     });
