@@ -108,6 +108,30 @@ function stripQuote(text: string | null): string {
   return String(text || '').split(/---+\s*On /)[0].trim();
 }
 
+// Where a reply stops being new text and starts quoting what came before.
+// stripQuote only knows the "--- On" form; real mail also uses "On ... wrote:",
+// ">" quoting, Outlook "From:" blocks and the French "De :" / "Le ... a écrit".
+const QUOTE_MARKERS: RegExp[] = [
+  /^-{2,}\s*On .+/m,
+  /^On .+ wrote:\s*$/m,
+  /^_{5,}\s*$/m,
+  /^De\s*:\s.+/m,
+  /^From:\s.+/m,
+  /^Le .+ a \u00e9crit\s*:/m,
+  /^>+\s?/m,
+];
+
+/** Just the newly written part of a message, with quoted history removed. */
+export function newestPart(body: string | null): string {
+  const s = String(body || '');
+  let cut = -1;
+  for (const re of QUOTE_MARKERS) {
+    const m = s.match(re);
+    if (m?.index !== undefined && (cut === -1 || m.index < cut)) cut = m.index;
+  }
+  return (cut <= 0 ? s : s.slice(0, cut)).trim();
+}
+
 /**
  * Readable text for an email, falling back to its HTML.
  *
@@ -135,6 +159,98 @@ export function plainBody(email: { text_body: string | null; html_body?: string 
     .replace(/&#39;/g, "'")
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+// Words that carry no request on their own: greetings, thanks, and bare
+// acknowledgements. A message built only from these needs no reply and must
+// not raise an alert.
+const PLEASANTRY_WORDS = new Set([
+  'hi', 'hii', 'hiya', 'hello', 'helo', 'hey', 'heya', 'dear', 'good', 'morning',
+  'afternoon', 'evening', 'day', 'greetings', 'salut', 'bonjour', 'hallo', 'hola',
+  'thanks', 'thank', 'thankyou', 'thx', 'ty', 'tnx', 'cheers', 'merci', 'danke',
+  'ok', 'okay', 'okey', 'k', 'kk', 'yes', 'yep', 'yeah', 'yup', 'no', 'nope',
+  'sure', 'fine', 'great', 'perfect', 'lovely', 'wonderful', 'excellent', 'nice',
+  'got', 'it', 'noted', 'understood', 'received', 'done', 'sorted',
+  'you', 'u', 'so', 'much', 'very', 'a', 'lot', 'all', 'the', 'for', 'and', 'to',
+  'best', 'regards', 'kind', 'warm', 'wishes', 'sincerely', 'yours', 'bye',
+  'take', 'care', 'again', 'my', 'friend', 'ma’am', 'sir',
+  'there', 'welcome', 'appreciate', 'appreciated', 'awesome', 'cool', 'super',
+  'brilliant', 'alright', 'indeed', 'absolutely', 'of', 'course', 'is', 'im',
+  'i', 'am', 'we', 'll', 've', 'will', 'do', 'that', 'this', 'now', 'then',
+  'ps', 'x', 'xx', 'love', 'blessings', 'god', 'bless',
+]);
+
+// Trailing client signatures and boilerplate that are not part of the message.
+const SIGNATURE_NOISE = [
+  // "Sent from my iPhone", "Sent from Yahoo Mail on Android", "Sent from Mail
+  // for Windows" — one pattern rather than one per vendor.
+  /\bsent from [^\n]*/gi,
+  /\bsent via [^\n]*/gi,
+  /\bget outlook for [^\n]*/gi,
+  /\benvoy[ée] de mon [^\n]*/gi,
+  /\btélécharger outlook[^\n]*/gi,
+];
+
+// Words that must never be mistaken for a signature, however they are written.
+const ACTIONABLE_WORDS = new Set([
+  'refund', 'refunded', 'cancel', 'cancelled', 'help', 'problem', 'issue',
+  'password', 'login', 'log', 'access', 'money', 'charge', 'charged', 'error',
+  'broken', 'wrong', 'missing', 'failed', 'dispute', 'chargeback', 'invoice',
+  'receipt', 'question', 'why', 'how', 'when', 'where', 'what', 'please',
+]);
+
+/** Longer than this and we never treat it as a bare pleasantry. */
+const CONTENT_FREE_MAX_CHARS = 80;
+
+/**
+ * True when an email says nothing that needs answering: "hi", "hello",
+ * "thanks", "ok", a greeting plus the sender's own name, and similar.
+ *
+ * Deliberately conservative. Anything with a word outside the pleasantry list
+ * (a question, "refund", "cannot log in") falls through and is triaged
+ * normally, because a false positive here means a real customer is silently
+ * ignored.
+ */
+export function isContentFree(body: string | null, fromName?: string | null): boolean {
+  let s = newestPart(body);
+  for (const re of SIGNATURE_NOISE) s = s.replace(re, ' ');
+  s = s.trim();
+  if (!s || s.length > CONTENT_FREE_MAX_CHARS) return false;
+
+  // Drop the sender's own name: "HelloSandra Buxton" is still just "hello".
+  const nameParts = String(fromName || '')
+    .split(/[\s<>@.,]+/)
+    .map((w) => w.toLowerCase())
+    .filter((w) => w.length > 1);
+
+  const words = s
+    // Split camel-cased runs so "HelloSandra" becomes two words.
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    // Strip punctuation, emoji and any other symbol.
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((w) => !nameParts.includes(w));
+
+  if (words.length === 0) return true; // emoji or punctuation only
+  if (words.length > 12) return false;
+  if (words.every((w) => PLEASANTRY_WORDS.has(w))) return true;
+
+  // A sign-off is not content. from_name is null on most inbound mail here, so
+  // "HelloSandra Buxton" arrives as unknown words; treat up to three trailing
+  // capitalised words as the sender's name, provided nothing actionable hides
+  // among them and everything before them is a pleasantry.
+  const unknown = words.filter((w) => !PLEASANTRY_WORDS.has(w));
+  if (unknown.length === 0 || unknown.length > 3) return false;
+  if (unknown.some((w) => ACTIONABLE_WORDS.has(w))) return false;
+  const tail = words.slice(-unknown.length);
+  if (!unknown.every((w) => tail.includes(w))) return false;
+  const capitalised = new Set(
+    (s.replace(/([a-z])([A-Z])/g, '$1 $2').match(/\b[A-Z][a-zA-Z'’-]{1,14}\b/g) || [])
+      .map((w) => w.toLowerCase()),
+  );
+  return unknown.every((w) => capitalised.has(w));
 }
 
 /**
@@ -533,7 +649,26 @@ export async function runTriageForEmail(
   const allowAck = opts.allowAck === true;
   const allowAlert = opts.allowAlert === true;
   try {
-    // First, look through the DB: if the owner already replied to this email in
+    // "hi", "hello", "thanks", a greeting followed by the sender's own name:
+    // nothing to answer. Short-circuited before the model runs, so it costs no
+    // credits and, more to the point, can never raise a phone alert. It still
+    // appears in the master view under "No reply".
+    if (isContentFree(plainBody(email), email.from_name)) {
+      await supabase
+        .from('emails')
+        .update({
+          ai_status: 'no_reply_needed',
+          ai_category: 'other',
+          ai_confidence: 1,
+          ai_draft: null,
+          ai_reason: 'Greeting or acknowledgement only, nothing to action.',
+          ai_processed_at: new Date().toISOString(),
+        })
+        .eq('id', email.id);
+      return;
+    }
+
+    // Next, look through the DB: if the owner already replied to this email in
     // its thread, there is nothing to draft. Mark it replied and stop.
     const thread = await getThread(supabase, email);
     const existingReply = findExistingOwnerReply(thread, email);
