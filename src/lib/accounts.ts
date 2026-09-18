@@ -116,12 +116,12 @@ export function getAccounts(): Account[] {
       resendApiKey: process.env.RESEND_API_KEY_BIBLEDOODLINGCLASS!,
     },
     {
-      id: 'treeoflifeclass',
-      email: 'hello@treeoflifeclass.com',
+      id: 'whimsicalscenesclass',
+      email: 'hello@whimsicalscenesclass.com',
       senderName: 'Aiko Mori',
-      displayName: 'Tree of Life - Aiko Mori',
-      domain: 'treeoflifeclass.com',
-      resendApiKey: process.env.RESEND_API_KEY_TREEOFLIFECLASS!,
+      displayName: 'Aiko Mori - Whimsical Scenes',
+      domain: 'whimsicalscenesclass.com',
+      resendApiKey: process.env.RESEND_API_KEY_WHIMSICALSCENESCLASS!,
     },
     {
       id: 'simplesketchesclass',
