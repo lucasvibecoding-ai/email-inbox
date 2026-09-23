@@ -1,7 +1,12 @@
 'use client';
 
 import { Email } from '@/lib/types';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import {
+  formatBytes,
+  uploadAttachment,
+  type UploadedAttachment,
+} from '@/lib/upload';
 
 interface ComposeModalProps {
   replyTo?: Email | null;
@@ -13,6 +18,7 @@ interface ComposeModalProps {
     html: string;
     inReplyTo?: string;
     references?: string[];
+    attachments?: UploadedAttachment[];
   }) => void;
   onClose: () => void;
   sending: boolean;
@@ -31,6 +37,30 @@ export default function ComposeModal({ replyTo, onSend, onClose, sending }: Comp
   );
   const [mode, setMode] = useState<'text' | 'html'>('text');
   const [showPreview, setShowPreview] = useState(false);
+  // Files upload as soon as they are picked, so pressing Send is instant and a
+  // failed upload is visible while there is still time to fix it.
+  const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
+  const [uploading, setUploading] = useState(0);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const addFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setAttachError(null);
+    const picked = Array.from(files);
+    setUploading((n) => n + picked.length);
+    for (const file of picked) {
+      try {
+        const uploaded = await uploadAttachment(file);
+        setAttachments((prev) => [...prev, uploaded]);
+      } catch (err) {
+        setAttachError(err instanceof Error ? err.message : 'Upload failed');
+      } finally {
+        setUploading((n) => n - 1);
+      }
+    }
+    if (fileInput.current) fileInput.current.value = '';
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,6 +87,7 @@ export default function ComposeModal({ replyTo, onSend, onClose, sending }: Comp
       html,
       inReplyTo: replyTo?.message_id || undefined,
       references: refs.length ? refs : undefined,
+      attachments: attachments.length ? attachments : undefined,
     });
   };
 
@@ -148,13 +179,54 @@ export default function ComposeModal({ replyTo, onSend, onClose, sending }: Comp
               }`}
             />
           )}
+          {(attachments.length > 0 || uploading > 0 || attachError) && (
+            <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-t border-[var(--border)]">
+              {attachments.map((a) => (
+                <span
+                  key={a.path}
+                  className="flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-xs text-[var(--muted)]"
+                >
+                  📎 {a.filename} <span className="opacity-60">{formatBytes(a.size)}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAttachments((prev) => prev.filter((x) => x.path !== a.path))}
+                    className="cursor-pointer pl-1 hover:text-[var(--foreground)]"
+                    aria-label={`Remove ${a.filename}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {uploading > 0 && (
+                <span className="text-xs text-[var(--muted)]">
+                  Uploading {uploading} file{uploading === 1 ? '' : 's'}...
+                </span>
+              )}
+              {attachError && <span className="text-xs text-red-600">{attachError}</span>}
+            </div>
+          )}
           <div className="flex justify-between items-center px-4 py-3 border-t border-[var(--border)]">
+            <input
+              ref={fileInput}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => addFiles(e.target.files)}
+            />
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              className="mr-3 text-sm text-[var(--muted)] hover:text-[var(--foreground)] cursor-pointer"
+              title="Attach files"
+            >
+              📎 Attach
+            </button>
             <button
               type="submit"
-              disabled={sending || !to}
+              disabled={sending || !to || uploading > 0}
               className="bg-[var(--primary)] text-white px-6 py-2 rounded-md text-sm font-medium hover:bg-[var(--primary-hover)] disabled:opacity-50 cursor-pointer"
             >
-              {sending ? 'Sending...' : 'Send'}
+              {sending ? 'Sending...' : uploading > 0 ? 'Uploading...' : 'Send'}
             </button>
             <button
               type="button"

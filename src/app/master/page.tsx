@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { formatBytes, uploadAttachment, type UploadedAttachment } from '@/lib/upload';
 import Link from 'next/link';
 
 interface MasterEmail {
@@ -160,6 +161,30 @@ export default function MasterView() {
   const [threadLoading, setThreadLoading] = useState(false);
   const expandedIdRef = useRef<string | null>(null);
   const [draft, setDraft] = useState('');
+  // Files for the open reply. Uploaded on pick (straight to storage), cleared
+  // whenever a different email is opened so they can never follow the wrong one.
+  const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
+  const [uploading, setUploading] = useState(0);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const addFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setAttachError(null);
+    const picked = Array.from(files);
+    setUploading((n) => n + picked.length);
+    for (const file of picked) {
+      try {
+        const uploaded = await uploadAttachment(file);
+        setAttachments((prev) => [...prev, uploaded]);
+      } catch (err) {
+        setAttachError(err instanceof Error ? err.message : 'Upload failed');
+      } finally {
+        setUploading((n) => n - 1);
+      }
+    }
+    if (fileInput.current) fileInput.current.value = '';
+  };
   const [busyId, setBusyId] = useState<string | null>(null);
   const [autoSend, setAutoSend] = useState(false);
   const [autoAck, setAutoAck] = useState(true);
@@ -224,6 +249,8 @@ export default function MasterView() {
     expandedIdRef.current = e.id;
     setExpandedId(e.id);
     setDraft(e.ai_draft || '');
+    setAttachments([]);
+    setAttachError(null);
     setThread([]);
     setThreadLoading(true);
     try {
@@ -267,11 +294,13 @@ export default function MasterView() {
           references: refs.length ? refs : undefined,
           accountId: e.account.id,
           replyToEmailId: e.id,
+          attachments: attachments.length ? attachments : undefined,
         }),
       });
       const result = await res.json();
       if (result.success) {
         setExpandedId(null);
+        setAttachments([]);
         fetchData();
       } else {
         alert(`Send failed: ${result.error || 'unknown error'}`);
@@ -603,13 +632,58 @@ export default function MasterView() {
                               placeholder="No draft — write a reply…"
                               className="flex-1 min-h-[180px] text-[13px] leading-relaxed border border-[var(--border)] rounded-lg p-3 outline-none focus:border-[var(--mine)] focus:ring-2 focus:ring-[var(--mine-border)] resize-none whitespace-pre-wrap transition-shadow"
                             />
+                            {(attachments.length > 0 || uploading > 0 || attachError) && (
+                              <div className="flex flex-wrap items-center gap-2 mt-2">
+                                {attachments.map((a) => (
+                                  <span
+                                    key={a.path}
+                                    className="flex items-center gap-1 rounded bg-[var(--hover)] px-2 py-1 text-[11px] text-[var(--muted)]"
+                                  >
+                                    📎 {a.filename}
+                                    <span className="opacity-60">{formatBytes(a.size)}</span>
+                                    <button
+                                      onClick={() =>
+                                        setAttachments((prev) => prev.filter((x) => x.path !== a.path))
+                                      }
+                                      className="cursor-pointer pl-1 hover:text-[var(--foreground)]"
+                                      aria-label={`Remove ${a.filename}`}
+                                    >
+                                      ×
+                                    </button>
+                                  </span>
+                                ))}
+                                {uploading > 0 && (
+                                  <span className="text-[11px] text-[var(--muted)]">
+                                    Uploading {uploading} file{uploading === 1 ? '' : 's'}…
+                                  </span>
+                                )}
+                                {attachError && (
+                                  <span className="text-[11px] text-red-600">{attachError}</span>
+                                )}
+                              </div>
+                            )}
                             <div className="flex items-center gap-2 mt-3">
+                              <input
+                                ref={fileInput}
+                                type="file"
+                                multiple
+                                className="hidden"
+                                onChange={(ev) => addFiles(ev.target.files)}
+                              />
                               <button
                                 onClick={() => send(e)}
-                                disabled={busyId === e.id || !draft.trim() || !e.account}
+                                disabled={busyId === e.id || !draft.trim() || !e.account || uploading > 0}
                                 className="bg-[var(--mine)] text-white px-5 py-2 rounded-lg text-[13px] font-medium hover:opacity-90 disabled:opacity-40 cursor-pointer transition-opacity shadow-[var(--card-shadow)]"
                               >
                                 {busyId === e.id ? 'Sending…' : `Send as ${e.account ? e.account.displayName.split(' - ')[0] : '—'}`}
+                              </button>
+                              <button
+                                onClick={() => fileInput.current?.click()}
+                                disabled={busyId === e.id}
+                                className="text-[13px] text-[var(--muted)] hover:text-[var(--foreground)] px-3 py-2 cursor-pointer rounded-lg hover:bg-[var(--hover)] transition-colors"
+                                title="Attach files"
+                              >
+                                📎 Attach
                               </button>
                               <button
                                 onClick={() => dismiss(e)}

@@ -142,6 +142,7 @@ export default function Home() {
     html: string;
     inReplyTo?: string;
     references?: string[];
+    attachments?: { path: string; filename: string; contentType: string; size: number }[];
   }) => {
     setSending(true);
     try {

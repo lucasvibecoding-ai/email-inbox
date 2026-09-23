@@ -96,3 +96,101 @@ export async function getAttachmentsByEmail(
   }
   return byEmail;
 }
+
+// --- Outbound attachments --------------------------------------------------
+// Files the owner attaches to a reply. They do NOT travel through the API as
+// base64: a Vercel function body is capped at 4.5 MB, which a single phone
+// photo can exceed. Instead the browser uploads straight to Supabase Storage
+// with a signed URL and the send call passes only the storage path.
+
+/** An uploaded file, as the browser hands it to the send API. */
+export interface OutboundAttachment {
+  path: string;
+  filename: string;
+  contentType?: string | null;
+  size?: number | null;
+}
+
+/** Everything outbound lives under this prefix, and a path outside it is
+ *  rejected: the send API must never be talked into reading someone else's
+ *  received attachment by path. */
+const OUTBOUND_PREFIX = 'outbound/';
+
+export const MAX_OUTBOUND_FILES = 10;
+/** Resend caps a whole message at 40 MB; stay well under it after base64. */
+export const MAX_OUTBOUND_TOTAL_BYTES = 20 * 1024 * 1024;
+
+export function isOutboundPath(path: unknown): path is string {
+  return (
+    typeof path === 'string' &&
+    path.startsWith(OUTBOUND_PREFIX) &&
+    !path.includes('..') &&
+    path.length < 300
+  );
+}
+
+/** A signed URL the browser can PUT one file to, plus the path to send back. */
+export async function createOutboundUploadUrl(
+  supabase: SupabaseClient,
+  filename: string,
+): Promise<{ path: string; signedUrl: string }> {
+  const safeName = (filename || 'file').replace(/[^\w.-]+/g, '_').slice(0, 120);
+  const path = `${OUTBOUND_PREFIX}${crypto.randomUUID()}-${safeName}`;
+  const { data, error } = await supabase.storage
+    .from(ATTACHMENTS_BUCKET)
+    .createSignedUploadUrl(path);
+  if (error || !data?.signedUrl) {
+    throw new Error(error?.message || 'Could not create an upload URL');
+  }
+  return { path, signedUrl: data.signedUrl };
+}
+
+/** Read the uploaded files back out of storage in the shape Resend wants.
+ *  Throws if a file is missing or the set is too big, so a send never goes out
+ *  silently missing what the owner attached. */
+export async function loadOutboundAttachments(
+  supabase: SupabaseClient,
+  files: OutboundAttachment[],
+): Promise<{ filename: string; content: string }[]> {
+  if (files.length > MAX_OUTBOUND_FILES) {
+    throw new Error(`Too many attachments (max ${MAX_OUTBOUND_FILES})`);
+  }
+  const out: { filename: string; content: string }[] = [];
+  let total = 0;
+  for (const f of files) {
+    if (!isOutboundPath(f.path)) throw new Error('Invalid attachment');
+    const { data, error } = await supabase.storage.from(ATTACHMENTS_BUCKET).download(f.path);
+    if (error || !data) throw new Error(`Attachment "${f.filename}" could not be read`);
+    const bytes = Buffer.from(await data.arrayBuffer());
+    total += bytes.length;
+    if (total > MAX_OUTBOUND_TOTAL_BYTES) {
+      throw new Error('Attachments are too large together (max 20 MB)');
+    }
+    out.push({ filename: f.filename || 'file', content: bytes.toString('base64') });
+  }
+  return out;
+}
+
+/** Record sent files against the outbound row so the thread shows the same
+ *  clips as received mail. Best effort: the mail is already gone, so a failure
+ *  here must not fail the send. */
+export async function recordOutboundAttachments(
+  supabase: SupabaseClient,
+  emailRowId: string,
+  files: OutboundAttachment[],
+): Promise<void> {
+  if (!emailRowId || files.length === 0) return;
+  try {
+    await supabase.from('attachments').insert(
+      files.map((f) => ({
+        email_id: emailRowId,
+        filename: f.filename || 'file',
+        content_type: f.contentType || null,
+        size: f.size ?? null,
+        url: f.path,
+      })),
+    );
+  } catch (err) {
+    console.error('recordOutboundAttachments failed for', emailRowId, err);
+  }
+}

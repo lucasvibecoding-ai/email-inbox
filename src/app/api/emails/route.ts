@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { getAccount, getAccounts, getResendClient } from '@/lib/accounts';
+import {
+  loadOutboundAttachments,
+  recordOutboundAttachments,
+  type OutboundAttachment,
+} from '@/lib/attachments';
 
 // Must stay a single string literal: supabase-js infers the row type from the
 // literal, and building it with join() widens it to `string` and erases the
@@ -69,6 +74,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { to, cc, bcc, subject, html, text, inReplyTo, references, accountId, replyToEmailId } = body;
+    const attachments: OutboundAttachment[] = Array.isArray(body.attachments) ? body.attachments : [];
 
     const account = getAccount(accountId || getAccounts()[0].id);
     if (!account) {
@@ -77,6 +83,21 @@ export async function POST(req: NextRequest) {
 
     const resend = getResendClient(account);
     const from = `${account.senderName} <${account.email}>`;
+    const supabase = getServiceClient();
+
+    // Pulled back out of storage before the send, so a file that did not
+    // upload fails the send loudly instead of quietly going out without it.
+    let resendAttachments: { filename: string; content: string }[] = [];
+    if (attachments.length) {
+      try {
+        resendAttachments = await loadOutboundAttachments(supabase, attachments);
+      } catch (err) {
+        return NextResponse.json(
+          { error: err instanceof Error ? err.message : 'Attachment failed' },
+          { status: 400 },
+        );
+      }
+    }
 
     const headers: Record<string, string> = {};
     if (inReplyTo) headers['In-Reply-To'] = inReplyTo;
@@ -91,6 +112,7 @@ export async function POST(req: NextRequest) {
       html: html || undefined,
       text: text || undefined,
       headers: Object.keys(headers).length ? headers : undefined,
+      attachments: resendAttachments.length ? resendAttachments : undefined,
     });
 
     if (result.error) {
@@ -98,7 +120,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Store sent email in DB
-    const supabase = getServiceClient();
     const { data: outbound } = await supabase
       .from('emails')
       .insert({
@@ -118,6 +139,10 @@ export async function POST(req: NextRequest) {
       })
       .select('id')
       .single();
+
+    if (outbound?.id) {
+      await recordOutboundAttachments(supabase, outbound.id, attachments);
+    }
 
     // If this send answered a triaged inbound email (from the Master View),
     // mark that email replied and link the outbound message.
