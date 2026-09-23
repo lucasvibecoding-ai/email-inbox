@@ -10,6 +10,7 @@ import { maybeSendAck } from './autoack';
 import { getAttachmentsByEmail } from './attachments';
 
 export type TriageCategory =
+  | 'acknowledgement'
   | 'access_help'
   | 'presale_question'
   | 'refund'
@@ -20,6 +21,7 @@ export type TriageCategory =
   | 'other';
 
 const CATEGORIES: TriageCategory[] = [
+  'acknowledgement',
   'access_help',
   'presale_question',
   'refund',
@@ -79,7 +81,7 @@ const TRIAGE_TOOL_SCHEMA: Anthropic.Tool['input_schema'] = {
       type: 'string',
       enum: CATEGORIES,
       description:
-        'access_help = how to log in / access after purchase (not a genuine failure). presale_question = a question before buying. refund = any refund or cancellation. payment_issue = double or failed charge, chargeback, wrong amount or currency. complaint = dissatisfaction, dispute, or emotional. receipt = invoice / receipt / VAT / tax request, or an automated receipt. spam = spam, marketing, phishing, or unrelated. other = anything else.',
+        'acknowledgement = the customer is only saying thanks, confirming, or looking forward to starting, and asks nothing and reports no problem ("ok thanks", "thank you so much", "cannot wait to start"). access_help = how to log in / access after purchase (not a genuine failure). presale_question = a question before buying. refund = any refund or cancellation. payment_issue = double or failed charge, chargeback, wrong amount or currency. complaint = dissatisfaction, dispute, or emotional. receipt = invoice / receipt / VAT / tax request, or an automated receipt. spam = spam, marketing, phishing, or unrelated. other = anything else.',
     },
     needs_human: {
       type: 'boolean',
@@ -178,6 +180,17 @@ const PLEASANTRY_WORDS = new Set([
   'brilliant', 'alright', 'indeed', 'absolutely', 'of', 'course', 'is', 'im',
   'i', 'am', 'we', 'll', 've', 'will', 'do', 'that', 'this', 'now', 'then',
   'ps', 'x', 'xx', 'love', 'blessings', 'god', 'bless',
+  // Looking-forward-to-it replies to the course-is-ready email: "can't wait to
+  // start", "so excited", "ready to begin". Deliberately excludes question
+  // words (when / how / what), which stay actionable.
+  'wait', 'waiting', 'cant', 'can', 'excited', 'exciting', 'looking', 'forward',
+  'soon', 'start', 'starting', 'started', 'begin', 'beginning', 'happy', 'glad',
+  'pleased', 'thrilled', 'ready', 'finally', 'everything', 'your', 'me', 'am',
+  'super', 'amazing', 'fantastic', 'beautiful', 'first', 'class', 'classes',
+  'lesson', 'lessons', 'work', 'working', 'through', 'them', 'these', 'weekend',
+  // Stripping the apostrophe leaves the tail of a contraction as its own word:
+  // "can't" becomes "can" + "t".
+  't', 's', 'nt',
 ]);
 
 // Trailing client signatures and boilerplate that are not part of the message.
@@ -216,6 +229,9 @@ export function isContentFree(body: string | null, fromName?: string | null): bo
   for (const re of SIGNATURE_NOISE) s = s.replace(re, ' ');
   s = s.trim();
   if (!s || s.length > CONTENT_FREE_MAX_CHARS) return false;
+  // A question mark means they asked something, however short and however
+  // politely. Never silence it.
+  if (s.includes('?')) return false;
 
   // Drop the sender's own name: "HelloSandra Buxton" is still just "hello".
   const nameParts = String(fromName || '')
@@ -311,6 +327,7 @@ function systemPrompt(
     `You are the customer-support assistant for the online course "${account.displayName}". You reply to emails sent to ${account.email}, writing AS the course's support persona, ${persona.full}. You are ${persona.full} and no one else: never sign, name, or refer to yourself as any other person, whatever names appear in the guides below. For each incoming email you do two things: (1) triage it into a category, and (2) draft a reply. You MUST call the record_triage tool with your result.`,
     '',
     '## Grounding and safety (critical)',
+    '- acknowledgement: if the email only thanks you, confirms something, or says the customer is excited or looking forward to starting, and it asks NOTHING and reports NO problem, set category = acknowledgement, needs_human = false and draft_reply = "". The owner does not want a pleasantry sitting in their queue. The moment the email also asks a question, reports a problem, disputes something, or requests anything, it is NOT an acknowledgement: classify it normally and let it reach the owner.',
     '- Use ONLY facts in the COURSE BRIEF, PLATFORM FACTS, and VOICE GUIDE below. Never invent prices, dates, policies, URLs, order details, or account specifics.',
     '- If you are not confident, or the email needs an action you cannot take (issuing a refund, granting or fixing access, changing an order or the purchase email), set needs_human = true.',
     '- refund, payment_issue, and complaint ALWAYS get needs_human = true. You may state a policy warmly, but never promise, process, or confirm a refund, and never confirm an account or access change.',
@@ -429,6 +446,9 @@ export async function triageEmail(params: {
 /** Map a triage result to the stored ai_status, honoring the auto-send policy. */
 export function computeStatus(r: TriageResult, autoSendEnabled: boolean): AiStatus {
   if (r.category === 'spam') return 'no_reply_needed';
+  // A pure thank-you never needs the owner, whatever the model said about
+  // needs_human: it is the one category defined by having nothing to answer.
+  if (r.category === 'acknowledgement') return 'no_reply_needed';
   if (r.category === 'receipt' && !r.needs_human) return 'no_reply_needed';
   const autoSafe =
     autoSendEnabled &&
