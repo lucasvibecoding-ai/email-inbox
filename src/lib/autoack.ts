@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Account } from './accounts';
-import { getAccounts } from './accounts';
+import { accountAddresses, getAccounts } from './accounts';
 import type { Email } from './types';
 import { sendReply } from './send';
 
@@ -159,12 +159,12 @@ export async function maybeSendAck(
         .limit(50),
     ]);
 
-    const inbox = account.email.toLowerCase();
+    const inbox = accountAddresses(account);
     const priorInbound = (fromThem || []).filter((m) =>
-      (m.to_addresses || []).some((a: string) => a?.toLowerCase() === inbox),
+      (m.to_addresses || []).some((a: string) => inbox.includes(a?.toLowerCase())),
     );
-    const priorOutbound = (toThem || []).filter(
-      (m) => (m.from_address || '').toLowerCase() === inbox,
+    const priorOutbound = (toThem || []).filter((m) =>
+      inbox.includes((m.from_address || '').toLowerCase()),
     );
 
     // Same conversation, continued: they wrote or we wrote under this subject
@@ -207,6 +207,7 @@ export async function maybeSendAck(
       html,
       inReplyTo: email.message_id,
       references: email.message_id ? [email.message_id] : null,
+      wroteTo: email.to_addresses,
     });
   } catch (err) {
     console.error('Auto-ack failed for email', email.id, err);

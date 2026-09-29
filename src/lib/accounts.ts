@@ -6,6 +6,9 @@ export interface Account {
   senderName: string;
   displayName: string;
   domain: string;
+  // More domains in the same Resend account that land in this inbox. A reply goes
+  // out from the domain the customer wrote to (user, 2026-09-29).
+  aliasDomains?: string[];
   resendApiKey: string;
 }
 
@@ -57,6 +60,8 @@ export function getAccounts(): Account[] {
       senderName: 'Aiko Mori',
       displayName: 'Aiko Mori - Visual Notes',
       domain: 'visualnotesclass.com',
+      // The course site moved to drawyournotes.com (2026-09-29), same Resend account.
+      aliasDomains: ['drawyournotes.com'],
       resendApiKey: process.env.RESEND_API_KEY_VISUALNOTESCLASS!,
     },
     {
@@ -146,10 +151,38 @@ export function getAccount(id: string): Account | undefined {
   return getAccounts().find((a) => a.id === id);
 }
 
+const domainsOf = (a: Account) => [a.domain, ...(a.aliasDomains ?? [])];
+
+// "Aiko <hello@x.com>" or "hello@x.com" -> "hello@x.com"
+const bareAddress = (raw: string | null | undefined) =>
+  (raw?.match(/<([^>]+)>/)?.[1] ?? raw ?? '').trim().toLowerCase();
+
 export function getAccountByEmail(email: string): Account | undefined {
   return getAccounts().find(
-    (a) => a.email === email || email.endsWith(`@${a.domain}`)
+    (a) => a.email === email || domainsOf(a).some((d) => email.endsWith(`@${d}`))
   );
+}
+
+/** Every address this inbox answers for: its own, plus the same mailbox on each alias domain. */
+export function accountAddresses(account: Account): string[] {
+  const mailbox = account.email.split('@')[0];
+  return [account.email, ...(account.aliasDomains ?? []).map((d) => `${mailbox}@${d}`)].map((a) =>
+    a.toLowerCase()
+  );
+}
+
+/**
+ * The address to answer from: this inbox's mailbox on the domain the customer
+ * wrote to, so a reply never switches domains mid-conversation. Falls back to
+ * the inbox's own address (new emails, or nothing to go on).
+ */
+export function replyAddress(account: Account, wroteTo?: (string | null)[] | null): string {
+  const mailbox = account.email.split('@')[0];
+  for (const raw of wroteTo ?? []) {
+    const domain = domainsOf(account).find((d) => bareAddress(raw).endsWith(`@${d}`));
+    if (domain) return `${mailbox}@${domain}`;
+  }
+  return account.email;
 }
 
 export function getResendClient(account: Account): Resend {

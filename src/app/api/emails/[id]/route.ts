@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
-import { getAccountByEmail } from '@/lib/accounts';
+import { accountAddresses, getAccountByEmail } from '@/lib/accounts';
 import { getAttachmentsByEmail } from '@/lib/attachments';
 
 // Most messages we will show for one correspondent, newest kept.
@@ -88,12 +88,11 @@ export async function GET(
         .limit(CONVERSATION_LIMIT),
     ]);
 
+    const addresses = accountAddresses(account);
     const onThisInbox = (m: EmailRow) =>
       m.direction === 'inbound'
-        ? (m.to_addresses || []).some(
-            (a) => a?.toLowerCase() === account.email.toLowerCase(),
-          )
-        : (m.from_address || '').toLowerCase() === account.email.toLowerCase();
+        ? (m.to_addresses || []).some((a) => addresses.includes(a?.toLowerCase()))
+        : addresses.includes((m.from_address || '').toLowerCase());
 
     // Cast: the select string is chosen at runtime (light vs full), so
     // supabase-js cannot infer the row shape from a literal here.

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
-import { getAccount, getAccounts, getResendClient } from '@/lib/accounts';
+import { accountAddresses, getAccount, getAccounts, getResendClient, replyAddress } from '@/lib/accounts';
 import {
   loadOutboundAttachments,
   recordOutboundAttachments,
@@ -33,8 +33,11 @@ export async function GET(req: NextRequest) {
 
   // Filter by account
   if (account) {
+    // Every address the inbox answers for (an inbox can span two domains).
     query = query.or(
-      `to_addresses.cs.{${account.email}},from_address.eq.${account.email}`
+      accountAddresses(account)
+        .flatMap((a) => [`to_addresses.cs.{${a}}`, `from_address.eq.${a}`])
+        .join(',')
     );
   }
 
@@ -82,8 +85,21 @@ export async function POST(req: NextRequest) {
     }
 
     const resend = getResendClient(account);
-    const from = `${account.senderName} <${account.email}>`;
     const supabase = getServiceClient();
+
+    // A reply goes out from the domain the customer wrote to (one inbox can span
+    // two domains), found on the email being answered.
+    let wroteTo: string[] | null = null;
+    if (replyToEmailId || inReplyTo) {
+      const lookup = supabase.from('emails').select('to_addresses').limit(1);
+      const { data: original } = await (replyToEmailId
+        ? lookup.eq('id', replyToEmailId)
+        : lookup.eq('message_id', inReplyTo)
+      ).maybeSingle();
+      wroteTo = original?.to_addresses ?? null;
+    }
+    const fromAddress = replyAddress(account, wroteTo);
+    const from = `${account.senderName} <${fromAddress}>`;
 
     // Pulled back out of storage before the send, so a file that did not
     // upload fails the send loudly instead of quietly going out without it.
@@ -124,7 +140,7 @@ export async function POST(req: NextRequest) {
       .from('emails')
       .insert({
         message_id: result.data?.id || `sent-${Date.now()}`,
-        from_address: account.email,
+        from_address: fromAddress,
         from_name: account.senderName,
         to_addresses: Array.isArray(to) ? to : [to],
         cc_addresses: cc || null,

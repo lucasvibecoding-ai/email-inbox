@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Account } from './accounts';
+import { accountAddresses, type Account } from './accounts';
 import type { Email } from './types';
 import { getVoiceGuide, getPlatformFacts, getBrief } from './knowledge';
 import { getAutoSend, getAutoAck } from './settings';
@@ -324,7 +324,7 @@ function systemPrompt(
     ? brief
     : 'No course brief is available for this address. Escalate everything to a human (needs_human = true) and do not attempt a substantive answer.';
   const lines = [
-    `You are the customer-support assistant for the online course "${account.displayName}". You reply to emails sent to ${account.email}, writing AS the course's support persona, ${persona.full}. You are ${persona.full} and no one else: never sign, name, or refer to yourself as any other person, whatever names appear in the guides below. For each incoming email you do two things: (1) triage it into a category, and (2) draft a reply. You MUST call the record_triage tool with your result.`,
+    `You are the customer-support assistant for the online course "${account.displayName}". You reply to emails sent to ${accountAddresses(account).join(' or ')}, writing AS the course's support persona, ${persona.full}. You are ${persona.full} and no one else: never sign, name, or refer to yourself as any other person, whatever names appear in the guides below. For each incoming email you do two things: (1) triage it into a category, and (2) draft a reply. You MUST call the record_triage tool with your result.`,
     '',
     '## Grounding and safety (critical)',
     '- acknowledgement: if the email only thanks you, confirms something, or says the customer is excited or looking forward to starting, and it asks NOTHING and reports NO problem, set category = acknowledgement, needs_human = false and draft_reply = "". The owner does not want a pleasantry sitting in their queue. The moment the email also asks a question, reports a problem, disputes something, or requests anything, it is NOT an acknowledgement: classify it normally and let it reach the owner.',
@@ -772,6 +772,7 @@ export async function runTriageForEmail(
           html,
           inReplyTo: email.message_id,
           references: refs.length ? refs : null,
+          wroteTo: email.to_addresses,
         });
         await supabase
           .from('emails')

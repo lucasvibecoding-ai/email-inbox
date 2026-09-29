@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { Account, getResendClient } from './accounts';
+import { Account, getResendClient, replyAddress } from './accounts';
 
 // Send a reply as the given account via Resend and record it as an outbound
 // email. Returns the new outbound row id (or null). Shared by the auto-send
@@ -14,10 +14,13 @@ export async function sendReply(
     html: string;
     inReplyTo?: string | null;
     references?: string[] | null;
+    /** The addresses the customer wrote to: the reply goes out from the same domain. */
+    wroteTo?: (string | null)[] | null;
   },
 ): Promise<string | null> {
   const resend = getResendClient(account);
-  const from = `${account.senderName} <${account.email}>`;
+  const fromAddress = replyAddress(account, params.wroteTo);
+  const from = `${account.senderName} <${fromAddress}>`;
 
   const headers: Record<string, string> = {};
   if (params.inReplyTo) headers['In-Reply-To'] = params.inReplyTo;
@@ -37,7 +40,7 @@ export async function sendReply(
     .from('emails')
     .insert({
       message_id: result.data?.id || `sent-${Date.now()}`,
-      from_address: account.email,
+      from_address: fromAddress,
       from_name: account.senderName,
       to_addresses: [params.to],
       subject: params.subject,
