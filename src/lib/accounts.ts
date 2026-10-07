@@ -144,6 +144,16 @@ export function getAccounts(): Account[] {
       domain: 'bibleinkclass.com',
       resendApiKey: process.env.RESEND_API_KEY_BIBLEINKCLASS!,
     },
+    {
+      // The aikoarts.com course platform: the all-courses membership, single courses
+      // bought on the platform, billing and refunds.
+      id: 'aikoarts',
+      email: 'hello@aikoarts.com',
+      senderName: 'Aiko Arts',
+      displayName: 'Memberships - Aiko Arts',
+      domain: 'aikoarts.com',
+      resendApiKey: process.env.RESEND_API_KEY_AIKOARTS!,
+    },
   ];
 }
 
