@@ -150,7 +150,7 @@ export function getAccounts(): Account[] {
       id: 'aikoarts',
       email: 'hello@aikoarts.com',
       senderName: 'Aiko Arts',
-      displayName: 'Memberships - Aiko Arts',
+      displayName: 'Aiko Arts',
       domain: 'aikoarts.com',
       resendApiKey: process.env.RESEND_API_KEY_AIKOARTS!,
     },
