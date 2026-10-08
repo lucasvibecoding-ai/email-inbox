@@ -4,23 +4,26 @@
 
 ## 1. Who can get the membership
 - Only people who **already own at least one Aiko Arts course** see the membership offer. It is shown after they sign in at https://aikoarts.com/sign-in, on their courses page and inside their courses.
-- First-time buyers never see it. They buy a single course on its own website first.
+- It is also offered on each course website's thank-you page, right after someone buys a course there ("Add all courses", 30 minutes). Card buyers say yes in one click (charged to the card they just used); PayPal buyers get a short secure Stripe page (card, Apple Pay or Google Pay).
+- A membership bought on the thank-you page waits for their account: it opens as soon as they set up their aikoarts.com account (or sign in) with either email from that purchase (the one they typed or their PayPal/Stripe email). If it went to the wrong email or they can't see it, escalate.
 - If someone asks how to join: sign in at https://aikoarts.com/sign-in with the email they used to buy, then click "Unlock all courses".
 
 ## 2. Price and what's included
 - **$35 per month** (visitors in the EU pay **€35 per month**). Billed monthly by card through Stripe (Apple Pay and Google Pay work too). **No PayPal** for the membership.
+- **Special price: $25 per month (€25 in the EU)**, offered with a real timer: 30 minutes on a course's thank-you page after buying, and once for 10 minutes the first time a course owner sees the offer on aikoarts.com (new and older students alike). They keep $25 for as long as they stay a member; the price never goes up for them. If they cancel and come back, it's $35. The timer can't be extended; if someone asks for the $25 price after it ended, escalate.
 - **No free trial.** The first month is charged the day they join.
 - **No automatic refunds.** See section 5.
-- Includes **every published course** on Aiko Arts (15 right now, 60+ hours of video), with their bonuses and downloadables, plus **every new course the day it is released**.
+- Includes **every published course** on Aiko Arts, with their bonuses and downloadables, plus **every new course the day it is released**. (Don't quote a number of courses or hours; it changes as courses are added.)
 - **Not included:** the paid add-on packs ($17 each). Those are bought separately.
-- The comparison shown on the site: all 15 courses one by one would be 15 × $47 = $705.
+- The site compares it with buying every course one by one at $47 each.
 
 ## 3. Buying a single course inside aikoarts.com
 - People who own a course can also buy any other course on its own for **$47** (€47 in the EU), one time, theirs forever. Access opens right away in their account.
-- NEEDS INPUT: the refund policy for a single course bought inside aikoarts.com. Escalate any refund request for one.
+- Single courses (and add-ons) bought with a one time payment fall under the **90 day money back guarantee** in the Terms (section 6). Still escalate every refund request; don't process or promise it yourself.
+- The invoice for a single course is linked at the bottom of the purchase email ("Your invoice: view or download it here"). It is **not** on the account page ("My account"), which only covers the membership.
 
 ## 4. Cancelling (make it easy, never argue)
-- They cancel themselves at **https://aikoarts.com/billing**: click "Cancel membership", then "Yes, cancel". Two clicks, no email needed.
+- They cancel themselves at **https://aikoarts.com/account**: click "Cancel membership", then "Yes, cancel". Two clicks, no email needed.
 - After cancelling, they are **not charged again** and **keep every course until the end of the month they already paid for**. Then the extra courses lock.
 - **Courses they bought on their own stay theirs forever**, membership or not.
 - They can undo a cancel before the month ends with "Keep my membership" on the same page.
@@ -31,13 +34,13 @@
 - If a refund is given, it takes 5 to 10 days to show on the card.
 
 ## 6. Invoices and billing
-- Every payment (the first month and every monthly renewal, and every single course) gets a **fiscalized invoice**. They can open it from the **Payments** list on https://aikoarts.com/billing ("Invoice" link).
-- The Billing page also shows the plan, the next charge date and the card on file, with **"Update card"** to change the card.
-- If a monthly payment fails, Stripe retries the card for a while and access continues meanwhile. Suggest "Update card" on the Billing page.
+- Every membership payment (the first month and every monthly renewal) gets a **fiscalized invoice**. It is linked at the bottom of that payment's email and in the **Payments** list on https://aikoarts.com/account ("Invoice" link). Single-course invoices are only in the purchase email (see section 3).
+- The account page ("My account") also shows the plan, the next charge date and the card on file, with **"Update card"** to change the card.
+- If a monthly payment fails, Stripe retries the card for a while and access continues meanwhile. Suggest "Update card" on the account page ("My account"). Cancelling while a payment is failing ends the membership right away and nothing more is charged.
 
 ## 7. FAQ
 **Q: How do I cancel?**
-Go to https://aikoarts.com/billing, click "Cancel membership", then "Yes, cancel". You won't be charged again and you keep all the courses until the end of the month you paid for.
+Go to https://aikoarts.com/account, click "Cancel membership", then "Yes, cancel". You won't be charged again and you keep all the courses until the end of the month you paid for.
 
 **Q: Will I lose the course I bought before?**
 No. Any course you bought on its own stays yours forever, even after the membership ends.
@@ -49,13 +52,13 @@ No. Every new course is included the day it comes out.
 No, the $17 add-on packs are bought separately.
 
 **Q: Where is my invoice?**
-On https://aikoarts.com/billing, under Payments. Every payment has its own invoice.
+For the membership: at the bottom of each payment email, and on https://aikoarts.com/account under Payments. For a single course: at the bottom of the purchase email. If they can't find it, escalate.
 
 **Q: I was charged and want my money back.**
-Escalate. Do not promise or refuse a refund. (If they also want to stop future payments, they can cancel on https://aikoarts.com/billing in two clicks.)
+Escalate. Do not promise or refuse a refund. (If they also want to stop future payments, they can cancel on https://aikoarts.com/account in two clicks.)
 
 ## 8. Always escalate to a human
 - Every refund request, chargebacks, disputes, "I don't recognise this charge".
-- Someone who paid but cannot see the courses, or a Billing page that doesn't work.
+- Someone who paid but cannot see the courses, or a account page ("My account") that doesn't work.
 - Anything about changing the price, discounts, pausing a membership, or gifting it.
 - Anything not covered above.
