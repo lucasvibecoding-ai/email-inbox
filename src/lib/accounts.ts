@@ -129,6 +129,14 @@ export function getAccounts(): Account[] {
       resendApiKey: process.env.RESEND_API_KEY_WHIMSICALSCENESCLASS!,
     },
     {
+      id: 'inkdogclass',
+      email: 'hello@inkdogclass.com',
+      senderName: 'Aiko Mori',
+      displayName: 'Aiko Mori - Ink Dogs',
+      domain: 'inkdogclass.com',
+      resendApiKey: process.env.RESEND_API_KEY_INKDOGCLASS!,
+    },
+    {
       id: 'simplesketchesclass',
       email: 'hello@simplesketchesclass.com',
       senderName: 'Aiko Mori',
