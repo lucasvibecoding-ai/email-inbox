@@ -65,7 +65,7 @@ const AUTO_SEND_CATEGORIES: TriageCategory[] = ['access_help', 'presale_question
 const NEVER_AUTO_SEND: TriageCategory[] = ['refund', 'payment_issue', 'complaint'];
 const CONFIDENCE_THRESHOLD = 0.85;
 
-const MODEL = 'claude-haiku-4-5';
+const MODEL = 'claude-haiku-5-5';
 
 let _client: Anthropic | null = null;
 function anthropic(): Anthropic {
