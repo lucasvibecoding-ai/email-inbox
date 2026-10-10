@@ -4,13 +4,13 @@
 
 ## 1. Who can get the membership
 - Only people who **already own at least one Aiko Arts course** see the membership offer. It is shown after they sign in at https://aikoarts.com/sign-in, on their courses page and inside their courses.
-- It is also offered on each course website's thank-you page, right after someone buys a course there ("Add all courses", 30 minutes). Card buyers say yes in one click (charged to the card they just used); PayPal buyers get a short secure Stripe page (card, Apple Pay or Google Pay).
+- It is NOT offered on the course websites' thank-you pages (that offer was switched off on 2026-10-09).
 - A membership bought on the thank-you page waits for their account: it opens as soon as they set up their aikoarts.com account (or sign in) with either email from that purchase (the one they typed or their PayPal/Stripe email). If it went to the wrong email or they can't see it, escalate.
 - If someone asks how to join: sign in at https://aikoarts.com/sign-in with the email they used to buy, then click "Unlock all courses".
 
 ## 2. Price and what's included
 - **$35 per month** (visitors in the EU pay **€35 per month**). Billed monthly by card through Stripe (Apple Pay and Google Pay work too). **No PayPal** for the membership.
-- **Special price: $25 per month (€25 in the EU)**, offered with a real timer: 30 minutes on a course's thank-you page after buying, and once for 10 minutes the first time a course owner sees the offer on aikoarts.com (new and older students alike). They keep $25 for as long as they stay a member; the price never goes up for them. If they cancel and come back, it's $35. The timer can't be extended; if someone asks for the $25 price after it ended, escalate.
+- **Special price: $30 per month (€30 in the EU)**, offered ONCE per course owner for 5 days, starting the first time they see the membership on aikoarts.com (a real countdown, it can't be extended or restarted). Whoever joins at $30 keeps $30 for as long as they stay a member; the price never goes up for them. Members who joined at the earlier $25 special price keep $25. If someone cancels and comes back later, it's $35. If someone asks for the special price after their 5 days ended, escalate.
 - **No free trial.** The first month is charged the day they join.
 - **No automatic refunds.** See section 5.
 - Includes **every published course** on Aiko Arts, with their bonuses and downloadables, plus **every new course the day it is released**. (Don't quote a number of courses or hours; it changes as courses are added.)
