@@ -137,6 +137,16 @@ export function getAccounts(): Account[] {
       resendApiKey: process.env.RESEND_API_KEY_INKDOGCLASS!,
     },
     {
+      // Art Therapy (calmwithart.com), 2026-10-14: the domain sits in the Ink Dogs Resend account, so it shares that
+      // account's key and its inbound webhook (WEBHOOK_SECRET_INKDOGCLASS); its own inbox, replies from hello@calmwithart.com.
+      id: 'calmwithart',
+      email: 'hello@calmwithart.com',
+      senderName: 'Art Therapy',
+      displayName: 'Art Therapy',
+      domain: 'calmwithart.com',
+      resendApiKey: process.env.RESEND_API_KEY_INKDOGCLASS!,
+    },
+    {
       id: 'simplesketchesclass',
       email: 'hello@simplesketchesclass.com',
       senderName: 'Aiko Mori',
