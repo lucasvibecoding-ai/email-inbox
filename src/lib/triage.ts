@@ -215,6 +215,15 @@ const ACTIONABLE_WORDS = new Set([
 /** Longer than this and we never treat it as a bare pleasantry. */
 const CONTENT_FREE_MAX_CHARS = 80;
 
+// Senders that only ever deliver scams: fake damage claims, fake Meta
+// verification badges and fake copyright notices relayed through AppSheet.
+// Straight to Spam with no model call, so they never alert or get an ack.
+const SPAM_SENDERS = new Set(['noreply@appsheet.com']);
+
+export function isSpamSender(fromAddress: string | null): boolean {
+  return SPAM_SENDERS.has((fromAddress || '').trim().toLowerCase());
+}
+
 /**
  * True when an email says nothing that needs answering: "hi", "hello",
  * "thanks", "ok", a greeting plus the sender's own name, and similar.
@@ -669,6 +678,21 @@ export async function runTriageForEmail(
   const allowAck = opts.allowAck === true;
   const allowAlert = opts.allowAlert === true;
   try {
+    if (isSpamSender(email.from_address)) {
+      await supabase
+        .from('emails')
+        .update({
+          ai_status: 'no_reply_needed',
+          ai_category: 'spam',
+          ai_confidence: 1,
+          ai_draft: null,
+          ai_reason: 'Sender is on the spam list.',
+          ai_processed_at: new Date().toISOString(),
+        })
+        .eq('id', email.id);
+      return;
+    }
+
     // "hi", "hello", "thanks", a greeting followed by the sender's own name:
     // nothing to answer. Short-circuited before the model runs, so it costs no
     // credits and, more to the point, can never raise a phone alert. It still
