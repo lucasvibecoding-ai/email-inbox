@@ -224,6 +224,26 @@ export function isSpamSender(fromAddress: string | null): boolean {
   return SPAM_SENDERS.has((fromAddress || '').trim().toLowerCase());
 }
 
+// Owner, 2026-10-26: every "Caspian Wilder" email is spam, whatever address it comes from
+// (matched on the sender name, the address or the signature).
+const SPAM_PERSON = /caspian[\s._-]*wilder/i;
+
+// Owner, 2026-10-26: every email saying the packaging is broken is spam. The courses are
+// digital, nothing ships, so a broken or damaged packaging claim is always a scam.
+const BROKEN_PACKAGING =
+  /\bpackag(?:e|es|ing)\b[^.!?\n]{0,40}\b(?:broken|damaged)\b|\b(?:broken|damaged)\b[^.!?\n]{0,20}\bpackag(?:e|es|ing)\b/i;
+
+/** Why this email goes straight to Spam, or null when it doesn't. */
+export function spamReason(email: Pick<Email, 'from_address' | 'from_name' | 'subject' | 'text_body' | 'html_body'>): string | null {
+  if (isSpamSender(email.from_address)) return 'Sender is on the spam list.';
+  const body = plainBody(email as Email);
+  if (SPAM_PERSON.test(email.from_name || '') || SPAM_PERSON.test(email.from_address || '') || SPAM_PERSON.test(body)) {
+    return 'Caspian Wilder emails go to spam.';
+  }
+  if (BROKEN_PACKAGING.test(`${email.subject || ''}\n${body}`)) return 'Says the packaging is broken: the courses are digital, so this is a scam.';
+  return null;
+}
+
 /**
  * True when an email says nothing that needs answering: "hi", "hello",
  * "thanks", "ok", a greeting plus the sender's own name, and similar.
@@ -678,7 +698,8 @@ export async function runTriageForEmail(
   const allowAck = opts.allowAck === true;
   const allowAlert = opts.allowAlert === true;
   try {
-    if (isSpamSender(email.from_address)) {
+    const spam = spamReason(email);
+    if (spam) {
       await supabase
         .from('emails')
         .update({
@@ -686,7 +707,7 @@ export async function runTriageForEmail(
           ai_category: 'spam',
           ai_confidence: 1,
           ai_draft: null,
-          ai_reason: 'Sender is on the spam list.',
+          ai_reason: spam,
           ai_processed_at: new Date().toISOString(),
         })
         .eq('id', email.id);
