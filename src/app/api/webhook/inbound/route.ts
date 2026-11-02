@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
       process.env.WEBHOOK_SECRET_BIBLEINKCLASS,
       process.env.WEBHOOK_SECRET_AIKOARTS,
       process.env.WEBHOOK_SECRET_INKDOGCLASS,
+      process.env.WEBHOOK_SECRET_FANTASYLANDSCAPECLASS,
     ].filter(Boolean) as string[];
 
     if (secrets.length > 0) {
