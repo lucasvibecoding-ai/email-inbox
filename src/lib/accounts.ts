@@ -145,6 +145,16 @@ export function getAccounts(): Account[] {
       resendApiKey: process.env.RESEND_API_KEY_FANTASYLANDSCAPECLASS!,
     },
     {
+      // Sea Acrylics (seaacrylicsclass.com), 2026-11-06: the domain sits in the Fantasy Landscape Resend account, so it
+      // shares that account's key and its inbound webhook (WEBHOOK_SECRET_FANTASYLANDSCAPECLASS); replies from hello@seaacrylicsclass.com.
+      id: 'seaacrylicsclass',
+      email: 'hello@seaacrylicsclass.com',
+      senderName: 'Mayumi',
+      displayName: 'Mayumi - Sea Acrylics',
+      domain: 'seaacrylicsclass.com',
+      resendApiKey: process.env.RESEND_API_KEY_FANTASYLANDSCAPECLASS!,
+    },
+    {
       // Art Therapy (calmwithart.com), 2026-10-14: the domain sits in the Ink Dogs Resend account, so it shares that
       // account's key and its inbound webhook (WEBHOOK_SECRET_INKDOGCLASS); its own inbox, replies from hello@calmwithart.com.
       id: 'calmwithart',
